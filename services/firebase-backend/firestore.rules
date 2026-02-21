@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isOwner(userId);
+      allow delete: if false;
+    }
+    
+    match /users/{userId}/devices/{deviceId} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId);
+    }
+    
+    match /users/{userId}/sync/{syncId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if false;
+      allow delete: if isOwner(userId);
+    }
+    
+    match /users/{userId}/sessions/{sessionId} {
+      allow read, write, delete: if isOwner(userId);
+    }
+    
+    match /users/{userId}/presence/{deviceId} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    match /pairingCodes/{code} {
+      allow read: if true;
+      allow create, update: if isAuthenticated();
+      allow delete: if false;
+    }
+  }
+}

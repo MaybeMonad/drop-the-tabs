@@ -8,11 +8,15 @@
     "dev:extension": "turbo run dev --filter=@drop-the-tabs/extension",
     "dev:mobile": "turbo run dev --filter=@drop-the-tabs/mobile",
     "dev:server": "turbo run dev --filter=@drop-the-tabs/sync-server",
+    "dev:firebase": "cd services/firebase-backend && firebase emulators:start",
     "lint": "turbo run lint",
     "type-check": "turbo run type-check",
     "clean": "turbo run clean && rm -rf node_modules .output",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "postinstall": "bunx patch-package"
+    "postinstall": "bunx patch-package",
+    "deploy:firebase": "cd services/firebase-backend && firebase deploy",
+    "deploy:firebase:functions": "cd services/firebase-backend && firebase deploy --only functions",
+    "deploy:firebase:rules": "cd services/firebase-backend && firebase deploy --only firestore:rules,storage:rules"
   },
   "devDependencies": {
     "@types/bun": "^1.0.0",
