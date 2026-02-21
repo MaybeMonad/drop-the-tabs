@@ -1,89 +1,120 @@
-# Drop The Tabs - Implementation Details
+# Drop The Tabs - Implementation Guide
 
-## 已完成的架构
+## Completed Architecture
 
-### 文件结构
+### File Structure
 ```
 drop-the-tabs/
-├── wxt.config.ts          # WXT 配置文件
-├── package.json           # 依赖管理
-├── tsconfig.json          # TypeScript 配置
-├── tailwind.config.js     # Tailwind 配置
-├── postcss.config.js      # PostCSS 配置
-├── README.md              # 项目说明
-├── .gitignore             # Git 忽略规则
+├── wxt.config.ts          # WXT configuration
+├── package.json           # Dependency management
+├── tsconfig.json          # TypeScript configuration
+├── tailwind.config.js     # Tailwind configuration
+├── postcss.config.js      # PostCSS configuration
+├── README.md              # Project documentation
+├── .gitignore             # Git ignore rules
 ├── src/
-│   ├── background.ts      # Service Worker (后台脚本)
-│   ├── popup.tsx          # 弹出窗口入口
-│   ├── popup.html         # 弹出窗口 HTML
-│   ├── options.tsx        # 设置页面入口
-│   ├── options.html       # 设置页面 HTML
-│   ├── style.css          # 全局样式 (Tailwind)
+│   ├── entrypoints/
+│   │   ├── background/index.ts    # Service Worker
+│   │   ├── popup/                 # Popup window
+│   │   └── options/               # Settings page
 │   ├── components/
-│   │   └── Popup.tsx      # 主界面组件 (React)
-│   └── utils/
-│       ├── tabManager.ts      # 标签页管理核心
-│       ├── statsCollector.ts  # 使用时长统计
-│       ├── autoReminder.ts    # 智能提醒
-│       └── types.ts           # TypeScript 类型定义
+│   │   └── Popup.tsx              # Main UI component
+│   ├── utils/
+│   │   ├── tabManager.ts          # Tab management core
+│   │   ├── statsCollector.ts      # Time tracking
+│   │   ├── autoReminder.ts        # Smart reminders
+│   │   └── types.ts               # TypeScript definitions
+│   └── style.css                  # Global styles
 ```
 
-## 核心功能实现
+---
 
-### 1. 自动分组 (TabManager.autoGroupTabs)
-- 基于域名匹配规则
-- 支持 5 种默认分组：Work/Social/Shopping/Video/News
-- 使用 Chrome TabGroups API
-- 优先级系统（高优先级规则覆盖低优先级）
+## Core Features Implementation
 
-### 2. 自动去重 (TabManager.deduplicateTabs)
-- URL 指纹生成（移除 hash 和 tracking 参数）
-- 保留最近活跃的标签页
-- 关闭其他重复项
+### 1. Auto Grouping (`TabManager.autoGroupTabs`)
+- Domain-based matching rules
+- 5 default groups: Work, Social, Shopping, Video, News
+- Chrome TabGroups API integration
+- Priority system (higher priority rules override lower ones)
 
-### 3. 会话管理 (TabManager.saveSession/restoreSession)
-- 保存当前窗口所有标签页
-- 支持在新窗口恢复
-- 使用 Chrome Storage 存储
+### 2. Deduplication (`TabManager.deduplicateTabs`)
+- URL fingerprinting (removes hash and tracking parameters)
+- Preserves most recently active tab
+- Closes duplicate tabs
 
-### 4. 使用时长统计 (StatsCollector)
-- 监听标签页切换事件
-- 按域名聚合统计
-- 每日数据记录
-- 持久化存储到 IndexedDB
+### 3. Session Management (`TabManager.saveSession/restoreSession`)
+- Saves all tabs in current window
+- Restore in new window
+- Chrome Storage API for persistence
 
-### 5. 智能提醒 (AutoReminder)
-- 当标签页超过阈值（默认15个）时提醒
-- 10分钟冷却时间避免频繁打扰
-- 支持快捷操作（一键分组/去重）
+### 4. Time Tracking (`StatsCollector`)
+- Listens to tab activation events
+- Aggregates by domain
+- Daily statistics
+- IndexedDB for persistent storage
 
-### 6. 数据导出 (CSV/JSON/Markdown)
-- CSV: 适合 Excel 分析
-- JSON: 完整数据备份
-- Markdown: 适合导入 Obsidian
+### 5. Smart Reminders (`AutoReminder`)
+- Triggers when tab count exceeds threshold (default: 15)
+- 10-minute cooldown to prevent spam
+- Quick actions from notifications (group/deduplicate)
 
-## 下一步开发
+### 6. Data Export (CSV/JSON/Markdown)
+- CSV: For Excel analysis
+- JSON: Complete data backup
+- Markdown: For importing into Obsidian
 
-1. **安装依赖并测试**
+---
+
+## Next Steps
+
+1. **Install Dependencies and Test**
    ```bash
    cd /Users/leo/Documents/Projects/drop-the-tabs
-   npm install
-   npm run dev
+   bun install
+   bun run dev
    ```
 
-2. **加载到 Chrome**
-   - 打开 `chrome://extensions/`
-   - 开启开发者模式
-   - 加载 `.output/chrome-mv3-dev` 文件夹
+2. **Load in Chrome**
+   - Open `chrome://extensions/`
+   - Enable Developer mode
+   - Load `.output/chrome-mv3-dev` folder
 
-3. **迭代优化**
-   - 根据使用反馈调整分组规则
-   - 添加更多导出格式选项
-   - 优化 UI/UX
+3. **Iterate and Improve**
+   - Adjust grouping rules based on feedback
+   - Add more export formats
+   - Optimize UI/UX
 
-## 技术决策记录
+---
 
-- **WXT**: 选择 WXT 是因为它是目前最好的 Web Extension 开发框架，支持 React/Vue，热重载，自动处理 Manifest
-- **React + Tailwind**: 比 Vanilla 更好的组件化开发体验，适合长期迭代
-- **CSV 优先**: 用户需要数据分析，CSV 最通用
-- **智能提醒**: 比全自动更可控，不会打扰用户工作流
+## Technical Decisions
+
+- **WXT**: Chosen for its modern approach to extension development with built-in HMR and TypeScript support
+- **React + Base UI + Tailwind**: Provides excellent developer experience and full styling control
+- **CSV Priority**: Most versatile format for data analysis and sharing
+- **Smart Reminders**: Hybrid approach gives user control while providing helpful suggestions
+
+---
+
+## Development Guidelines
+
+### Code Style
+- Use TypeScript strict mode
+- Functional React components with hooks
+- Tailwind CSS for all styling
+- camelCase for variables/functions, PascalCase for components
+
+### Git Workflow
+```
+feat: Add new tab grouping feature
+fix: Resolve deduplication edge case
+docs: Update README with screenshots
+refactor: Simplify stats collector
+test: Add tests for tab manager
+```
+
+### Adding New Features
+1. Define types in `src/utils/types.ts`
+2. Implement logic in utility files
+3. Add UI to `src/components/Popup.tsx`
+4. Add message handler in background script
+5. Update README.md documentation
