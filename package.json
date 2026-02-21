@@ -6,6 +6,8 @@
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
     "dev:extension": "turbo run dev --filter=@drop-the-tabs/extension",
+    "dev:mobile": "turbo run dev --filter=@drop-the-tabs/mobile",
+    "dev:server": "turbo run dev --filter=@drop-the-tabs/sync-server",
     "lint": "turbo run lint",
     "type-check": "turbo run type-check",
     "clean": "turbo run clean && rm -rf node_modules .output",
