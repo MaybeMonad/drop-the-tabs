@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Device, Tab, Session, AdapterConfig } from '@/stubs/shared-core';
+import type { Device, Tab, Session, AdapterConfig } from '@drop-the-tabs/shared-core';
 
 interface AppState {
   // Sync

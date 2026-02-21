@@ -2,11 +2,11 @@
 import { 
   RealtimeSyncService, 
   SyncStatus,
+  keyExchangeService,
   type SyncOptions,
   type SyncMessage
-} from '@/stubs/shared-api';
-import { keyExchangeService } from '@/stubs/shared-api';
-import type { Tab, TabChangeEvent } from '@/stubs/shared-core';
+} from '@drop-the-tabs/shared-api';
+import type { Tab, TabChangeEvent } from '@drop-the-tabs/shared-core';
 
 interface EnhancedSyncOptions {
   deviceId: string;
