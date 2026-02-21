@@ -19,7 +19,7 @@ export async function encrypt(
   // Import key
   const cryptoKey = await crypto.subtle.importKey(
     'raw',
-    key,
+    key as BufferSource,
     { name: 'AES-GCM', length: 256 },
     false,
     ['encrypt']
@@ -62,7 +62,7 @@ export async function decrypt(
   // Import key
   const cryptoKey = await crypto.subtle.importKey(
     'raw',
-    key,
+    key as BufferSource,
     { name: 'AES-GCM', length: 256 },
     false,
     ['decrypt']
@@ -79,10 +79,10 @@ export async function decrypt(
   const decrypted = await crypto.subtle.decrypt(
     {
       name: 'AES-GCM',
-      iv: encryptedData.nonce,
+      iv: encryptedData.nonce as BufferSource,
     },
     cryptoKey,
-    combined
+    combined as BufferSource
   );
 
   const decoder = new TextDecoder();
@@ -103,19 +103,20 @@ export async function deriveAESKey(
   // Import shared secret as key material
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
-    sharedSecret,
+    sharedSecret as BufferSource,
     { name: 'HKDF' },
     false,
     ['deriveBits']
   );
 
   // Derive 256-bit key
+  const saltBuffer = salt ? salt : new Uint8Array(0);
   const derivedBits = await crypto.subtle.deriveBits(
     {
       name: 'HKDF',
       hash: 'SHA-256',
-      salt: salt || new Uint8Array(0),
-      info: new Uint8Array(0),
+      salt: saltBuffer as BufferSource,
+      info: new Uint8Array(0) as BufferSource,
     },
     keyMaterial,
     256

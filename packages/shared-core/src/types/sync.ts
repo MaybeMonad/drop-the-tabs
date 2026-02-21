@@ -1,6 +1,6 @@
 // packages/shared-core/src/types/sync.ts
 
-import type { Device } from './device.js';
+import type { Device, PresenceStatus } from './device.js';
 
 /**
  * Sync adapter types
@@ -109,15 +109,6 @@ export interface SyncAdapter {
   onConnect(callback: () => void): Unsubscribe;
   onDisconnect(callback: () => void): Unsubscribe;
   onError(callback: (error: Error) => void): Unsubscribe;
-}
-
-/**
- * Presence status
- */
-export interface PresenceStatus {
-  online: boolean;
-  lastActive?: number;
-  batteryLevel?: number;
 }
 
 /**

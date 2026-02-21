@@ -16,7 +16,7 @@ export async function generateKeyPair(): Promise<KeyPair> {
       { name: 'X25519' },
       true, // extractable
       ['deriveBits']
-    );
+    ) as CryptoKeyPair;
 
     const publicKey = await crypto.subtle.exportKey('raw', keyPair.publicKey);
     const privateKey = await crypto.subtle.exportKey('pkcs8', keyPair.privateKey);
@@ -41,7 +41,7 @@ export async function deriveSharedSecret(
   if (typeof crypto !== 'undefined' && crypto.subtle) {
     const importedPrivateKey = await crypto.subtle.importKey(
       'pkcs8',
-      privateKey,
+      privateKey as BufferSource,
       { name: 'X25519' },
       false,
       ['deriveBits']
@@ -49,7 +49,7 @@ export async function deriveSharedSecret(
 
     const importedPublicKey = await crypto.subtle.importKey(
       'raw',
-      publicKey,
+      publicKey as BufferSource,
       { name: 'X25519' },
       false,
       []
