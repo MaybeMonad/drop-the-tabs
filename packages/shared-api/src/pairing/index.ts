@@ -21,8 +21,6 @@ export {
   pairingReducer,
   createPairingSession,
   generatePairingSessionId,
-  arrayBufferToBase64,
-  base64ToArrayBuffer,
 } from './flow.js';
 
 export type {

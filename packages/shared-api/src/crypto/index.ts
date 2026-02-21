@@ -12,9 +12,7 @@ export {
   generateKeyPair, 
   deriveSharedSecret, 
   deriveAESKey,
-  generateNonce,
-  arrayBufferToBase64,
-  base64ToArrayBuffer
+  generateNonce
 } from '@drop-the-tabs/shared-core';
 
 export interface KeyExchangeSession {
