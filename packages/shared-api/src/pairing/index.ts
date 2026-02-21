@@ -16,3 +16,20 @@ export {
 } from './code.js';
 
 export type { PairingCodeMetadata } from './code.js';
+
+export {
+  pairingReducer,
+  createPairingSession,
+  generatePairingSessionId,
+  arrayBufferToBase64,
+  base64ToArrayBuffer,
+} from './flow.js';
+
+export type {
+  PairingSession,
+  PairingResult,
+  PairingRequest,
+  PairingResponse,
+  PairingState,
+  PairingEvent,
+} from './flow.js';
