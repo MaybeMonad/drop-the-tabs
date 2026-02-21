@@ -1,4 +1,4 @@
-// Mobile app backend configuration
+// Mobile backend configuration
 
 export type BackendType = 'firebase' | 'custom';
 
@@ -7,7 +7,6 @@ export interface BackendConfig {
   name: string;
   apiUrl: string;
   wsUrl?: string;
-  description: string;
 }
 
 export const BACKEND_CONFIGS: Record<BackendType, BackendConfig> = {
@@ -24,16 +23,12 @@ export const BACKEND_CONFIGS: Record<BackendType, BackendConfig> = {
     wsUrl: 'ws://localhost:3000/ws',
     description: 'Your own server',
   },
-};
+} as any;
+
+// Default Firebase URL
+export const DEFAULT_FIREBASE_URL = 'https://us-central1-drop-the-tabs-prod.cloudfunctions.net/api';
 
 // Get Firebase URL with project ID
-export function getFirebaseUrl(projectId?: string): string {
-  const id = projectId || 'drop-the-tabs-prod';
-  return `https://us-central1-${id}.cloudfunctions.net/api`;
+export function getFirebaseUrl(projectId: string = 'drop-the-tabs-prod'): string {
+  return `https://us-central1-${projectId}.cloudfunctions.net/api`;
 }
-
-// Default backend
-export const DEFAULT_BACKEND: BackendConfig = {
-  ...BACKEND_CONFIGS.firebase,
-  apiUrl: getFirebaseUrl(),
-};

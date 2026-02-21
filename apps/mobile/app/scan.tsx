@@ -1,19 +1,22 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, Server } from 'lucide-react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useMobilePairing } from '../../src/hooks/useMobilePairing';
 import { useAppStore } from '../../src/stores/appStore';
+import { getFirebaseUrl } from '../../src/config/backend';
 
 export default function ScanScreen() {
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(false);
   const [localDeviceId, setLocalDeviceId] = useState('');
+  const [backendUrl, setBackendUrl] = useState(getFirebaseUrl());
+  const [showBackendInput, setShowBackendInput] = useState(false);
   const { isPairing, result, pairWithQR } = useMobilePairing();
-  const { setSyncConfig, setDeviceId } = useAppStore();
+  const { setDeviceId } = useAppStore();
 
   useEffect(() => {
     if (permission?.granted) {
@@ -28,36 +31,22 @@ export default function ScanScreen() {
   }, [setDeviceId]);
 
   useEffect(() => {
-    if (result) {
-      if (result.success) {
-        Alert.alert(
-          'Pairing Successful',
-          'Your device is now connected!',
-          [
-            { 
-              text: 'OK', 
-              onPress: () => {
-                setSyncConfig({
-                  type: 'custom',
-                  httpEndpoint: 'http://localhost:3000',
-                  wsEndpoint: 'ws://localhost:3000/ws',
-                });
-                router.replace('/(tabs)');
-              }
-            }
-          ]
-        );
-      } else if (result.error) {
-        Alert.alert('Pairing Failed', result.error);
-        setScanning(true);
-      }
+    if (result?.success) {
+      Alert.alert(
+        'Pairing Successful',
+        'Your device is now connected!',
+        [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
+      );
+    } else if (result?.error) {
+      Alert.alert('Pairing Failed', result.error);
+      setScanning(true);
     }
-  }, [result, router, setSyncConfig]);
+  }, [result, router]);
 
   const handleBarCodeScanned = ({ data }: { data: string }) => {
     if (isPairing) return;
     setScanning(false);
-    pairWithQR(data, localDeviceId, 'Mobile Device');
+    pairWithQR(data, localDeviceId, 'Mobile Device', backendUrl);
   };
 
   if (!permission) {
@@ -73,11 +62,8 @@ export default function ScanScreen() {
     return (
       <SafeAreaView className="flex-1 bg-background p-4">
         <View className="flex-1 items-center justify-center">
-          <Text className="text-foreground text-lg mb-4 text-center">Camera access is needed to scan QR codes</Text>
-          <TouchableOpacity 
-            onPress={requestPermission}
-            className="bg-primary px-6 py-3 rounded-lg"
-          >
+          <Text className="text-foreground text-lg mb-4 text-center">Camera access is needed</Text>
+          <TouchableOpacity onPress={requestPermission} className="bg-primary px-6 py-3 rounded-lg">
             <Text className="text-primary-foreground font-medium">Grant Permission</Text>
           </TouchableOpacity>
         </View>
@@ -87,18 +73,49 @@ export default function ScanScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-black">
+      {/* Header */}
       <View className="absolute top-0 left-0 right-0 z-10 flex-row items-center justify-between px-4 py-3">
-        <TouchableOpacity 
-          onPress={() => router.back()} 
-          className="p-2 bg-black/50 rounded-full"
-        >
+        <TouchableOpacity onPress={() => router.back()} className="p-2 bg-black/50 rounded-full">
           <ArrowLeft size={24} color="white" />
         </TouchableOpacity>
         
         <Text className="text-white text-lg font-semibold">Scan QR Code</Text>
-        <View className="w-10" />
+        
+        <TouchableOpacity onPress={() => setShowBackendInput(!showBackendInput)} className="p-2 bg-black/50 rounded-full">
+          <Server size={20} color="white" />
+        </TouchableOpacity>
       </View>
 
+      {/* Backend URL Input */}
+      {showBackendInput && (
+        <View className="absolute top-20 left-4 right-4 z-20 bg-card p-4 rounded-xl">
+          <Text className="text-sm font-medium text-foreground mb-2">Backend URL</Text>
+          <TextInput
+            value={backendUrl}
+            onChangeText={setBackendUrl}
+            placeholder="https://..."
+            className="bg-background px-3 py-2 rounded-lg text-foreground"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <View className="flex-row gap-2 mt-2">
+            <TouchableOpacity 
+              onPress={() => setBackendUrl(getFirebaseUrl())}
+              className="flex-1 bg-primary/10 px-3 py-2 rounded-lg"
+            >
+              <Text className="text-primary text-center text-sm">Firebase Default</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              onPress={() => setBackendUrl('http://localhost:3000')}
+              className="flex-1 bg-muted px-3 py-2 rounded-lg"
+            >
+              <Text className="text-muted-foreground text-center text-sm">Localhost</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* Camera */}
       {scanning && !isPairing ? (
         <CameraView
           style={StyleSheet.absoluteFillObject}
@@ -113,6 +130,7 @@ export default function ScanScreen() {
         </View>
       )}
 
+      {/* Scanner Overlay */}
       <View className="absolute inset-0 pointer-events-none">
         <View className="absolute top-1/4 left-8 right-8 aspect-square">
           <View className="absolute inset-0 border-2 border-white/30 rounded-3xl" />
@@ -123,14 +141,12 @@ export default function ScanScreen() {
         </View>
       </View>
 
+      {/* Bottom */}
       <View className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 to-transparent">
-        <Text className="text-white/70 text-center mb-4">Point camera at the QR code in your browser extension</Text>
+        <Text className="text-white/70 text-center mb-4">Point camera at QR code in browser extension</Text>
         
-        <TouchableOpacity 
-          onPress={() => router.push('/pair-code')}
-          className="flex-row items-center justify-center gap-2 bg-white/20 px-6 py-4 rounded-xl"
-        >
-          <Text className="text-white font-medium">Enter Pairing Code Instead</Text>
+        <TouchableOpacity onPress={() => router.push('/pair-code')} className="bg-white/20 px-6 py-4 rounded-xl">
+          <Text className="text-white font-medium text-center">Enter Pairing Code Instead</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

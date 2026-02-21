@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { useAppStore } from '../stores/appStore';
 import { getFirebaseUrl, type BackendConfig } from '../config/backend';
 
-const DEFAULT_SERVER_URL = 'http://localhost:3000';
+const PAIRING_SERVER_URL = 'http://localhost:3000';
 
 interface PairingResult {
   success: boolean;
@@ -15,37 +15,29 @@ interface PairingResult {
 interface UseMobilePairingReturn {
   isPairing: boolean;
   result: PairingResult | null;
-  pairWithCode: (code: string, deviceId: string, deviceName?: string, serverUrl?: string) => Promise<void>;
-  pairWithQR: (qrData: string, deviceId: string, deviceName?: string) => Promise<void>;
+  pairWithCode: (code: string, deviceId: string, deviceName?: string, backendUrl?: string) => Promise<void>;
+  pairWithQR: (qrData: string, deviceId: string, deviceName?: string, backendUrl?: string) => Promise<void>;
   reset: () => void;
 }
 
 export function useMobilePairing(): UseMobilePairingReturn {
   const [isPairing, setIsPairing] = useState(false);
   const [result, setResult] = useState<PairingResult | null>(null);
-  const { setUserId, setDeviceId, syncConfig } = useAppStore();
-
-  // Get server URL from config or use default
-  const getServerUrl = useCallback((): string => {
-    if (syncConfig?.httpEndpoint) {
-      return syncConfig.httpEndpoint;
-    }
-    return DEFAULT_SERVER_URL;
-  }, [syncConfig]);
+  const { setUserId, setDeviceId, setSyncConfig } = useAppStore();
 
   const pairWithCode = useCallback(async (
     code: string,
     deviceId: string,
     deviceName?: string,
-    serverUrl?: string
+    backendUrl?: string
   ) => {
     setIsPairing(true);
     setResult(null);
 
-    const url = serverUrl || getServerUrl();
+    const apiUrl = backendUrl || PAIRING_SERVER_URL;
 
     try {
-      const response = await fetch(`${url}/pairing/pair`, {
+      const response = await fetch(`${apiUrl}/pairing/pair`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -53,7 +45,7 @@ export function useMobilePairing(): UseMobilePairingReturn {
           deviceId,
           type: 'mobile',
           name: deviceName || 'Mobile Device',
-          os: getOS(),
+          os: 'iOS',
         }),
       });
 
@@ -64,9 +56,16 @@ export function useMobilePairing(): UseMobilePairingReturn {
 
       const data = await response.json();
       
-      // Save to store
       setUserId(data.userId);
       setDeviceId(deviceId);
+      
+      // Auto-configure sync
+      const wsUrl = apiUrl.replace(/^http/, 'ws') + '/ws';
+      setSyncConfig({
+        type: apiUrl.includes('firebase') ? 'firebase' : 'custom',
+        httpEndpoint: apiUrl,
+        wsEndpoint: wsUrl,
+      });
       
       setResult({
         success: true,
@@ -83,51 +82,28 @@ export function useMobilePairing(): UseMobilePairingReturn {
     } finally {
       setIsPairing(false);
     }
-  }, [getServerUrl, setUserId, setDeviceId]);
+  }, [setUserId, setDeviceId, setSyncConfig]);
 
   const pairWithQR = useCallback(async (
     qrData: string,
     deviceId: string,
-    deviceName?: string
+    deviceName?: string,
+    backendUrl?: string
   ) => {
     setIsPairing(true);
     setResult(null);
 
     try {
-      // Parse QR data - can be URL format or JSON
-      let pairingCode: string | null = null;
-      let serverUrl: string | null = null;
-
-      // Try to parse as URL params
-      if (qrData.includes('?')) {
-        const params = new URLSearchParams(qrData.split('?')[1]);
-        pairingCode = params.get('code');
-        serverUrl = params.get('server');
-      }
-
-      // Try to parse as JSON
-      if (!pairingCode && qrData.startsWith('{')) {
-        try {
-          const json = JSON.parse(qrData);
-          pairingCode = json.code;
-          serverUrl = json.server;
-        } catch {
-          // Not valid JSON
-        }
-      }
-
-      // Fallback: try to extract code directly
-      if (!pairingCode) {
-        const match = qrData.match(/(\d{6})/);
-        if (match) {
-          pairingCode = match[1];
-        }
-      }
+      const params = new URLSearchParams(qrData);
+      const pairingCode = params.get('code');
+      
+      // Try to extract backend URL from QR if present
+      const qrBackendUrl = params.get('api') || backendUrl;
       
       if (pairingCode) {
-        await pairWithCode(pairingCode, deviceId, deviceName, serverUrl || undefined);
+        await pairWithCode(pairingCode, deviceId, deviceName, qrBackendUrl);
       } else {
-        throw new Error('Could not find pairing code in QR');
+        throw new Error('QR code does not contain pairing code');
       }
 
     } catch (error) {
@@ -152,9 +128,4 @@ export function useMobilePairing(): UseMobilePairingReturn {
     pairWithQR,
     reset,
   };
-}
-
-function getOS(): string {
-  // Simple OS detection for mobile
-  return 'iOS'; // or 'Android' based on Platform
 }
