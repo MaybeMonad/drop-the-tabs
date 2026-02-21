@@ -1,47 +1,132 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Camera, Keyboard } from 'lucide-react-native';
+import { ArrowLeft, Camera as CameraIcon, Keyboard } from 'lucide-react-native';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { useState, useEffect } from 'react';
+import { decodeQRCode, extractPublicKeyFromQR } from '@drop-the-tabs/shared-api';
+import { useAppStore } from '../../src/stores/appStore';
 
 export default function ScanScreen() {
   const router = useRouter();
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanning, setScanning] = useState(false);
+  const { setSyncConfig } = useAppStore();
 
-  return (
-    <SafeAreaView className="flex-1 bg-background">
-      {/* Header */}
-      <View className="flex-row items-center px-4 py-3 border-b border-border">
-        <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
-          <ArrowLeft size={24} className="text-foreground" />
-        </TouchableOpacity>
-        <Text className="flex-1 text-lg font-semibold text-foreground text-center">
-          Pair Device
-        </Text>
-        <View className="w-8" />
-      </View>
+  useEffect(() => {
+    if (permission?.granted) {
+      setScanning(true);
+    }
+  }, [permission]);
 
-      {/* Scan Options */}
-      <View className="flex-1 p-4">
-        <View className="flex-1 gap-4">
-          <TouchableOpacity className="flex-1 bg-card rounded-2xl items-center justify-center p-6">
-            <View className="w-20 h-20 rounded-full bg-primary/10 items-center justify-center mb-4">
-              <Camera size={32} className="text-primary" />
-            </View>
-            <Text className="text-xl font-semibold text-foreground mb-2">Scan QR Code</Text>
-            <Text className="text-sm text-muted-foreground text-center">
-              Point your camera at the QR code displayed in your browser extension
-            </Text>
-          </TouchableOpacity>
+  const handleBarCodeScanned = ({ data }: { data: string }) => {
+    setScanning(false);
+    
+    try {
+      // Decode QR payload
+      const payload = decodeQRCode(data);
+      const publicKey = extractPublicKeyFromQR(payload);
+      
+      // TODO: Complete pairing flow
+      Alert.alert(
+        'Device Found',
+        `Device ID: ${payload.did.slice(0, 8)}...\nWould you like to pair?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Pair', 
+            onPress: () => completePairing(payload.did, publicKey)
+          }
+        ]
+      );
+    } catch (error) {
+      Alert.alert('Invalid QR Code', 'Please scan a valid Drop The Tabs QR code');
+      setScanning(true);
+    }
+  };
 
-          <TouchableOpacity className="flex-1 bg-card rounded-2xl items-center justify-center p-6">
-            <View className="w-20 h-20 rounded-full bg-primary/10 items-center justify-center mb-4">
-              <Keyboard size={32} className="text-primary" />
-            </View>
-            <Text className="text-xl font-semibold text-foreground mb-2">Enter Pairing Code</Text>
-            <Text className="text-sm text-muted-foreground text-center">
-              Type the 6-digit code shown in your browser extension
-            </Text>
+  const completePairing = async (deviceId: string, publicKey: Uint8Array) => {
+    // TODO: Implement full pairing with key exchange
+    console.log('Pairing with device:', deviceId);
+    router.back();
+  };
+
+  if (!permission) {
+    return (
+      <SafeAreaView className="flex-1 bg-background items-center justify-center">
+        <Text className="text-foreground">Requesting camera permission...️</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (!permission.granted) {
+    return (
+      <SafeAreaView className="flex-1 bg-background p-4">
+        <View className="flex-1 items-center justify-center">
+          <Text className="text-foreground text-lg mb-4">Camera permission required</Text>
+          <TouchableOpacity 
+            onPress={requestPermission}
+            className="bg-primary px-6 py-3 rounded-lg"
+          >
+            <Text className="text-primary-foreground font-medium">Grant Permission</Text>
           </TouchableOpacity>
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView className="flex-1 bg-black">
+      {/* Header */}
+      <View className="absolute top-0 left-0 right-0 z-10 flex-row items-center justify-between px-4 py-3">
+        <TouchableOpacity 
+          onPress={() => router.back()} 
+          className="p-2 bg-black/50 rounded-full"
+        >
+          <ArrowLeft size={24} color="white" />
+        </TouchableOpacity>
+        
+        <Text className="text-white text-lg font-semibold">Scan QR Code</Text>
+        
+        <View className="w-10" />
+      </View>
+
+      {/* Camera */}
+      {scanning ? (
+        <CameraView
+          style={StyleSheet.absoluteFillObject}
+          facing="back"
+          onBarcodeScanned={handleBarCodeScanned}
+          barcodeScannerSettings={{
+            barcodeTypes: ['qr'],
+          }}
+        />
+      ) : (
+        <View className="flex-1 items-center justify-center bg-black">
+          <Text className="text-white">Processing...</Text>
+        </View>
+      )}
+
+      {/* Overlay */}
+      <View className="absolute inset-0 pointer-events-none">
+        <View className="absolute top-32 left-8 right-8 h-64 border-2 border-white/50 rounded-2xl"
+        >
+          <View className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-primary -mt-1 -ml-1" />
+          <View className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-primary -mt-1 -mr-1" />
+          <View className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-primary -mb-1 -ml-1" />
+          <View className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-primary -mb-1 -mr-1" />
+        </View>
+      </View>
+
+      {/* Bottom Options */}
+      <View className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black to-transparent">
+        <TouchableOpacity 
+          onPress={() => router.push('/pair-code')}
+          className="flex-row items-center justify-center gap-2 bg-white/20 backdrop-blur px-6 py-4 rounded-xl"
+        >
+          <Keyboard size={20} color="white" />
+          <Text className="text-white font-medium">Enter Pairing Code Instead</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
