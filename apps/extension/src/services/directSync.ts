@@ -214,5 +214,3 @@ export function getSyncService(): DirectSyncService {
   }
   return syncService;
 }
-
-export { DirectSyncService };

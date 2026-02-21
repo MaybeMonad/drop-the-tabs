@@ -123,3 +123,37 @@ export async function deriveAESKey(
 
   return new Uint8Array(derivedBits);
 }
+
+/**
+ * Generate a random nonce for encryption
+ */
+export function generateNonce(length: number = 12): Uint8Array {
+  if (typeof crypto === 'undefined' || !crypto.getRandomValues) {
+    throw new Error('Web Crypto API not available');
+  }
+  return crypto.getRandomValues(new Uint8Array(length));
+}
+
+/**
+ * Convert ArrayBuffer to base64 string
+ */
+export function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+/**
+ * Convert base64 string to ArrayBuffer
+ */
+export function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}

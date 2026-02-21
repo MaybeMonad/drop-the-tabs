@@ -7,6 +7,16 @@ import {
 } from '@drop-the-tabs/shared-core';
 import type { KeyPair, EncryptedPayload } from '@drop-the-tabs/shared-core';
 
+// Re-export crypto functions from shared-core
+export { 
+  generateKeyPair, 
+  deriveSharedSecret, 
+  deriveAESKey,
+  generateNonce,
+  arrayBufferToBase64,
+  base64ToArrayBuffer
+} from '@drop-the-tabs/shared-core';
+
 export interface KeyExchangeSession {
   id: string;
   ourKeyPair: KeyPair;
