@@ -2,44 +2,54 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   generateKeyPair,
   generateQRCodePayload,
-  generatePairingCode,
   createPairingSession,
-  pairingReducer,
   arrayBufferToBase64,
 } from '@drop-the-tabs/shared-api';
-import type { PairingState, PairingEvent, PairingSession } from '@drop-the-tabs/shared-api';
-import { CustomAdapter } from '@drop-the-tabs/shared-api';
-import type { AdapterConfig } from '@drop-the-tabs/shared-core';
-
-const PAIRING_SERVER_URL = process.env.NEXT_PUBLIC_SYNC_SERVER_URL || 'http://localhost:3000';
+import type { PairingState, PairingSession } from '@drop-the-tabs/shared-api';
+import { loadBackendConfig, type BackendConfig } from '../config/backend';
 
 interface UsePairingOptions {
   deviceId: string;
   deviceName?: string;
-  serverUrl?: string;
 }
 
 interface UsePairingReturn {
   state: PairingState;
   qrCode: string | null;
   pairingCode: string | null;
+  backendConfig: BackendConfig | null;
   generate: () => Promise<void>;
   cancel: () => void;
-  acceptPairing: (request: any) => Promise<void>;
-  rejectPairing: (reason: string) => void;
+  refreshBackend: () => Promise<void>;
 }
 
 export function usePairing(options: UsePairingOptions): UsePairingReturn {
-  const { deviceId, deviceName, serverUrl = PAIRING_SERVER_URL } = options;
+  const { deviceId, deviceName } = options;
   
   const [state, setState] = useState<PairingState>({ type: 'idle' });
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [keyPair, setKeyPair] = useState<any>(null);
   const [session, setSession] = useState<PairingSession | null>(null);
+  const [backendConfig, setBackendConfig] = useState<BackendConfig | null>(null);
+
+  // Load backend config on mount
+  useEffect(() => {
+    loadBackendConfig().then(setBackendConfig);
+  }, []);
+
+  const refreshBackend = useCallback(async () => {
+    const config = await loadBackendConfig();
+    setBackendConfig(config);
+  }, []);
 
   // Generate pairing session
   const generate = useCallback(async () => {
+    if (!backendConfig) {
+      setState({ type: 'error', error: 'Backend not configured' });
+      return;
+    }
+
     setState({ type: 'generating' });
     
     try {
@@ -51,16 +61,19 @@ export function usePairing(options: UsePairingOptions): UsePairingReturn {
       const newSession = createPairingSession(deviceId, kp, 5);
       setSession(newSession);
       
-      // Generate QR code payload
+      // Generate QR code payload with server URL
       const qrPayload = generateQRCodePayload({
         did: deviceId,
         pk: kp.publicKey,
         ts: Date.now(),
+        // Include code endpoint in QR for mobile
+        code: '', // Will be filled after getting from server
       });
       setQrCode(qrPayload);
       
       // Generate 6-digit pairing code via API
-      const response = await fetch(`${serverUrl}/api/pairing/code`, {
+      const serverUrl = backendConfig.apiUrl;
+      const response = await fetch(`${serverUrl}/pairing/code`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -76,11 +89,20 @@ export function usePairing(options: UsePairingOptions): UsePairingReturn {
       const { code } = await response.json();
       setPairingCode(code);
       
+      // Update QR with code
+      const updatedQrPayload = generateQRCodePayload({
+        did: deviceId,
+        pk: kp.publicKey,
+        ts: Date.now(),
+        code,
+      });
+      setQrCode(updatedQrPayload);
+      
       // Update state
       setState({ type: 'waiting', session: newSession });
       
       // Start polling for pairing status
-      startPolling(code);
+      startPolling(code, serverUrl);
       
     } catch (error) {
       setState({ 
@@ -88,13 +110,13 @@ export function usePairing(options: UsePairingOptions): UsePairingReturn {
         error: error instanceof Error ? error.message : 'Unknown error' 
       });
     }
-  }, [deviceId, deviceName, serverUrl]);
+  }, [deviceId, deviceName, backendConfig]);
 
   // Poll for pairing status
-  const startPolling = useCallback((code: string) => {
+  const startPolling = useCallback((code: string, serverUrl: string) => {
     const interval = setInterval(async () => {
       try {
-        const response = await fetch(`${serverUrl}/api/pairing/status/${code}`);
+        const response = await fetch(`${serverUrl}/pairing/status/${code}`);
         const data = await response.json();
         
         if (data.paired) {
@@ -130,7 +152,7 @@ export function usePairing(options: UsePairingOptions): UsePairingReturn {
         return prev;
       });
     }, 5 * 60 * 1000);
-  }, [serverUrl]);
+  }, []);
 
   // Cancel pairing
   const cancel = useCallback(() => {
@@ -138,17 +160,6 @@ export function usePairing(options: UsePairingOptions): UsePairingReturn {
     setQrCode(null);
     setPairingCode(null);
     setSession(null);
-  }, []);
-
-  // Accept pairing request
-  const acceptPairing = useCallback(async (request: any) => {
-    // TODO: Implement acceptance logic
-    // This would exchange keys and complete the pairing
-  }, []);
-
-  // Reject pairing request
-  const rejectPairing = useCallback((reason: string) => {
-    setState({ type: 'error', error: reason });
   }, []);
 
   // Cleanup on unmount
@@ -162,9 +173,9 @@ export function usePairing(options: UsePairingOptions): UsePairingReturn {
     state,
     qrCode,
     pairingCode,
+    backendConfig,
     generate,
     cancel,
-    acceptPairing,
-    rejectPairing,
+    refreshBackend,
   };
 }
