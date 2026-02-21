@@ -1,158 +1,148 @@
-// Background script entry for Drop The Tabs Extension
+// Background script for Drop The Tabs Extension
 import { defineBackground } from 'wxt/sandbox';
-import { AdaptiveSyncManager, SyncAdapterFactory, FirebaseAdapter, CustomAdapter } from '@drop-the-tabs/shared-api';
-import type { AdapterConfig, Tab, TabChangeEvent } from '@drop-the-tabs/shared-core';
+import { DirectSyncService, getSyncService } from '@/services/directSync';
 import { TabManager } from '@/utils/tabManager';
 import { StatsCollector } from '@/utils/statsCollector';
 import { AutoReminder } from '@/utils/autoReminder';
-import { SyncService } from '@/services/sync';
-
-// Register adapters
-SyncAdapterFactory.register('firebase', FirebaseAdapter as any);
-SyncAdapterFactory.register('custom', CustomAdapter as any);
+import type { Tab } from '@drop-the-tabs/shared-core';
 
 export default defineBackground(() => {
-  console.log('[Drop The Tabs] Background script starting...');
+  console.log('[DTT] Background script starting...');
 
-  // Initialize local modules
   const tabManager = new TabManager();
   const statsCollector = new StatsCollector();
   const autoReminder = new AutoReminder();
-  
-  // Initialize sync service
-  let syncService: SyncService | null = null;
+  const syncService = getSyncService();
 
-  // Initialize extension
+  // Initialize on startup
   initializeExtension();
 
   async function initializeExtension(): Promise<void> {
     try {
-      // Load sync configuration from storage
-      const config = await loadSyncConfig();
+      // Load backend config
+      const result = await chrome.storage.local.get(['backend_config', 'sync_userId']);
       
-      if (config) {
+      if (result.backend_config?.apiUrl) {
         // Initialize sync service
-        syncService = new SyncService(config);
-        await syncService.connect();
+        await syncService.initialize(result.backend_config.apiUrl);
         
-        console.log('[DTT] Sync service initialized');
+        // If we have a userId from previous pairing, restore it
+        if (result.sync_userId) {
+          await syncService.setUserId(result.sync_userId);
+          console.log('[DTT] Sync restored for user:', result.sync_userId);
+        }
+        
+        console.log('[DTT] Sync service ready');
       }
 
-      console.log('[Drop The Tabs] Extension initialized successfully');
+      console.log('[DTT] Extension initialized');
     } catch (error) {
-      console.error('[DTT] Failed to initialize extension:', error);
-      // Continue without sync - local mode
+      console.error('[DTT] Init error:', error);
     }
   }
 
-  async function loadSyncConfig(): Promise<AdapterConfig | null> {
-    const result = await chrome.storage.local.get('sync_config');
-    return result.sync_config || null;
-  }
-
-  // Listen for tab events
+  // Tab event listeners with sync
   chrome.tabs.onCreated.addListener((tab) => {
-    console.log('[DTT] Tab created:', tab.id);
     tabManager.handleTabCreated(tab);
     autoReminder.checkTabCount();
-    
-    // Sync to cloud if enabled
-    if (syncService?.isConnected()) {
-      syncService.publishTabChange({
-        type: 'created',
-        tab: convertToTab(tab),
-        timestamp: Date.now()
-      });
-    }
+    syncIfConnected();
   });
 
-  chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
-    console.log('[DTT] Tab removed:', tabId);
+  chrome.tabs.onRemoved.addListener((tabId) => {
     statsCollector.handleTabClosed(tabId);
-    
-    if (syncService?.isConnected()) {
-      syncService.publishTabChange({
-        type: 'removed',
-        tab: { id: tabId } as Tab,
-        timestamp: Date.now()
-      });
-    }
+    syncIfConnected();
   });
 
   chrome.tabs.onActivated.addListener(async (activeInfo) => {
-    console.log('[DTT] Tab activated:', activeInfo.tabId);
     statsCollector.handleTabActivated(activeInfo.tabId);
-    
     const tab = await chrome.tabs.get(activeInfo.tabId);
     tabManager.handleTabActivated(tab);
-    
-    if (syncService?.isConnected()) {
-      syncService.publishTabChange({
-        type: 'activated',
-        tab: convertToTab(tab),
-        timestamp: Date.now()
-      });
-    }
+    syncIfConnected();
   });
 
   chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete' || changeInfo.url || changeInfo.title) {
-      console.log('[DTT] Tab updated:', tabId);
       tabManager.handleTabUpdated(tab);
       statsCollector.handleTabUpdated(tab);
-      
-      if (syncService?.isConnected()) {
-        syncService.publishTabChange({
-          type: 'updated',
-          tab: convertToTab(tab),
-          timestamp: Date.now()
-        });
-      }
+      syncIfConnected();
     }
   });
 
-  // Set up periodic tasks
-  chrome.alarms.create('autoCleanup', { periodInMinutes: 5 });
-  chrome.alarms.create('saveStats', { periodInMinutes: 1 });
-  chrome.alarms.create('syncCheck', { periodInMinutes: 1 });
-
-  chrome.alarms.onAlarm.addListener((alarm) => {
-    switch (alarm.name) {
-      case 'autoCleanup':
-        tabManager.autoCleanup();
-        break;
-      case 'saveStats':
-        statsCollector.saveToStorage();
-        break;
-      case 'syncCheck':
-        checkSyncHealth();
-        break;
-    }
-  });
-
-  async function checkSyncHealth(): Promise<void> {
-    if (!syncService) return;
+  // Sync tabs if connected
+  async function syncIfConnected(): Promise<void> {
+    if (!syncService.isConnected()) return;
     
-    if (!syncService.isConnected()) {
-      console.log('[DTT] Sync disconnected, attempting reconnect...');
-      try {
-        await syncService.reconnect();
-      } catch (error) {
-        console.error('[DTT] Sync reconnect failed:', error);
-      }
+    try {
+      const tabs = await chrome.tabs.query({ currentWindow: true });
+      const tabData = tabs.map(tab => ({
+        id: tab.id || 0,
+        url: tab.url || '',
+        title: tab.title || '',
+        domain: getDomain(tab.url || ''),
+        favicon: tab.favIconUrl,
+        active: tab.active || false,
+        pinned: tab.pinned || false,
+        groupId: tab.groupId || -1,
+        deviceId: syncService.getDeviceId(),
+        lastModified: Date.now(),
+      }));
+      
+      await syncService.syncTabs(tabData);
+    } catch (error) {
+      console.error('[DTT] Sync error:', error);
     }
   }
 
-  // Handle messages from popup
+  function getDomain(url: string): string {
+    try {
+      return new URL(url).hostname.replace(/^www\./, '');
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  // Periodic tasks
+  chrome.alarms.create('autoCleanup', { periodInMinutes: 5 });
+  chrome.alarms.create('saveStats', { periodInMinutes: 1 });
+
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === 'autoCleanup') tabManager.autoCleanup();
+    if (alarm.name === 'saveStats') statsCollector.saveToStorage();
+  });
+
+  // Message handlers
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    console.log('[DTT] Message received:', request.action);
-    
     (async () => {
       try {
         switch (request.action) {
           case 'getTabs':
             const tabs = await tabManager.getAllTabs();
             sendResponse({ success: true, data: tabs });
+            break;
+            
+          case 'initSync':
+            // Called after successful pairing
+            if (request.apiUrl) {
+              await chrome.storage.local.set({ 
+                backend_config: { apiUrl: request.apiUrl },
+                sync_userId: request.userId 
+              });
+              
+              await syncService.initialize(request.apiUrl);
+              await syncService.setUserId(request.userId);
+              
+              sendResponse({ success: true, deviceId: syncService.getDeviceId() });
+            } else {
+              sendResponse({ success: false, error: 'Missing apiUrl' });
+            }
+            break;
+
+          case 'getSyncStatus':
+            sendResponse({
+              success: true,
+              connected: syncService.isConnected(),
+              deviceId: syncService.getDeviceId(),
+            });
             break;
             
           case 'groupTabs':
@@ -170,21 +160,6 @@ export default defineBackground(() => {
             sendResponse({ success: true, sessionId });
             break;
             
-          case 'saveCustomSession':
-            await tabManager.saveCustomSession(request.session);
-            sendResponse({ success: true });
-            break;
-            
-          case 'restoreSession':
-            await tabManager.restoreSession(request.sessionId);
-            sendResponse({ success: true });
-            break;
-            
-          case 'deleteSession':
-            await tabManager.deleteSession(request.sessionId);
-            sendResponse({ success: true });
-            break;
-            
           case 'getSessions':
             const sessions = await tabManager.getSessions();
             sendResponse({ success: true, data: sessions });
@@ -193,38 +168,6 @@ export default defineBackground(() => {
           case 'getStats':
             const stats = await statsCollector.getStats();
             sendResponse({ success: true, data: stats });
-            break;
-            
-          case 'exportData':
-            const data = await tabManager.exportData(request.format);
-            sendResponse({ success: true, data });
-            break;
-            
-          case 'closeAll':
-            await tabManager.closeAllTabs();
-            sendResponse({ success: true });
-            break;
-
-          case 'initSync':
-            // Initialize sync from popup
-            if (request.config) {
-              await chrome.storage.local.set({ sync_config: request.config });
-              syncService = new SyncService(request.config);
-              await syncService.connect();
-              sendResponse({ success: true });
-            } else {
-              sendResponse({ success: false, error: 'No config provided' });
-            }
-            break;
-
-          case 'getSyncStatus':
-            sendResponse({
-              success: true,
-              data: {
-                connected: syncService?.isConnected() || false,
-                usingFallback: syncService?.isUsingFallback?.() || false
-              }
-            });
             break;
             
           default:
@@ -236,31 +179,6 @@ export default defineBackground(() => {
       }
     })();
     
-    return true; // Keep message channel open for async
+    return true;
   });
-
-  // Convert Chrome tab to our Tab type
-  function convertToTab(tab: chrome.tabs.Tab): Tab {
-    const url = tab.url || '';
-    let domain = 'unknown';
-    
-    try {
-      domain = new URL(url).hostname.replace(/^www\./, '');
-    } catch {
-      // Invalid URL
-    }
-
-    return {
-      id: tab.id || 0,
-      url,
-      title: tab.title || '',
-      domain,
-      favicon: tab.favIconUrl,
-      active: tab.active || false,
-      pinned: tab.pinned || false,
-      groupId: tab.groupId || -1,
-      deviceId: '', // Set by sync service
-      lastModified: Date.now()
-    };
-  }
 });

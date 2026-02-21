@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   generateKeyPair,
   generateQRCodePayload,
@@ -34,6 +34,32 @@ export function usePairing(options: UsePairingOptions): UsePairingReturn {
   const [result, setResult] = useState<{ success: boolean; userId?: string; anonymousId?: string } | null>(null);
 
   const apiUrl = backendConfig.apiUrl;
+
+  // Handle successful pairing
+  useEffect(() => {
+    if (result?.success) {
+      console.log('[usePairing] Pairing successful, initializing sync...');
+      
+      // Save to storage
+      chrome.storage.local.set({
+        sync_userId: result.userId,
+        sync_anonymousId: result.anonymousId,
+      });
+      
+      // Initialize sync in background script
+      chrome.runtime.sendMessage({
+        action: 'initSync',
+        apiUrl: backendConfig.apiUrl,
+        userId: result.userId,
+      }, (response) => {
+        if (response?.success) {
+          console.log('[usePairing] Sync initialized with deviceId:', response.deviceId);
+        } else {
+          console.error('[usePairing] Sync init failed:', response?.error);
+        }
+      });
+    }
+  }, [result, backendConfig.apiUrl]);
 
   const generate = useCallback(async () => {
     setState({ type: 'generating' });
