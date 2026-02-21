@@ -274,6 +274,7 @@ export const api = onRequest({
   region: 'us-central1',
   memory: '256MiB',
   maxInstances: 10,
+  invoker: 'public', // Allow public access
 }, app);
 
 // ========== SCHEDULED FUNCTIONS ==========
