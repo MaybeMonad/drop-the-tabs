@@ -1,34 +1,27 @@
 {
   "name": "drop-the-tabs",
-  "version": "0.1.0",
-  "description": "Intelligent tab management for Chrome",
+  "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bunx wxt",
-    "dev:firefox": "bunx wxt -b firefox",
-    "build": "bunx wxt build",
-    "build:firefox": "bunx wxt build -b firefox",
-    "zip": "bunx wxt zip",
-    "zip:firefox": "bunx wxt zip -b firefox",
-    "compile": "bunx tsc --noEmit",
-    "postinstall": "bunx wxt prepare"
-  },
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "@base-ui-components/react": "^1.0.0-rc.0",
-    "lucide-react": "^0.460.0",
-    "dexie": "^3.2.4",
-    "date-fns": "^3.3.1"
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "type-check": "turbo run type-check",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "postinstall": "bunx patch-package"
   },
   "devDependencies": {
-    "@types/react": "^18.2.46",
-    "@types/react-dom": "^18.2.18",
-    "@wxt-dev/module-react": "^1.0.0",
-    "autoprefixer": "^10.4.16",
-    "postcss": "^8.4.32",
-    "tailwindcss": "^3.4.0",
-    "typescript": "^5.3.3",
-    "wxt": "^0.19.0"
+    "@types/bun": "^1.0.0",
+    "prettier": "^3.2.0",
+    "turbo": "^2.0.0",
+    "typescript": "^5.3.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=18"
   }
 }
