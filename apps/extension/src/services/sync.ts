@@ -4,13 +4,13 @@ import {
   generateKeyPair, 
   deriveSharedSecret,
   deriveAESKey
-} from '@drop-the-tabs/shared-api';
+} from '@/stubs/shared-api';
 import type { 
   AdapterConfig, 
   Tab, 
   TabChangeEvent,
   EncryptedPayload 
-} from '@drop-the-tabs/shared-core';
+} from '@/stubs/shared-core';
 
 /**
  * Extension sync service

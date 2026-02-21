@@ -28,6 +28,7 @@
     "apps/*",
     "packages/*"
   ],
+  "packageManager": "bun@1.2.22",
   "engines": {
     "node": ">=18"
   }

@@ -1,15 +1,15 @@
 // Background script entry for Drop The Tabs Extension
 import { defineBackground } from 'wxt/sandbox';
-import { AdaptiveSyncManager, SyncAdapterFactory } from '@drop-the-tabs/shared-api';
-import type { AdapterConfig, Tab, TabChangeEvent } from '@drop-the-tabs/shared-core';
+import { AdaptiveSyncManager, SyncAdapterFactory } from '@/stubs/shared-api';
+import type { AdapterConfig, Tab, TabChangeEvent } from '@/stubs/shared-core';
 import { TabManager } from '@/utils/tabManager';
 import { StatsCollector } from '@/utils/statsCollector';
 import { AutoReminder } from '@/utils/autoReminder';
 import { SyncService } from '@/services/sync';
 
 // Register adapters
-import { FirebaseAdapter } from '@drop-the-tabs/shared-api';
-import { CustomAdapter } from '@drop-the-tabs/shared-api';
+import { FirebaseAdapter } from '@/stubs/shared-api';
+import { CustomAdapter } from '@/stubs/shared-api';
 
 SyncAdapterFactory.register('firebase', FirebaseAdapter as any);
 SyncAdapterFactory.register('custom', CustomAdapter as any);

@@ -4,9 +4,9 @@ import {
   SyncStatus,
   type SyncOptions,
   type SyncMessage
-} from '@drop-the-tabs/shared-api';
-import { keyExchangeService } from '@drop-the-tabs/shared-api';
-import type { Tab, TabChangeEvent } from '@drop-the-tabs/shared-core';
+} from '@/stubs/shared-api';
+import { keyExchangeService } from '@/stubs/shared-api';
+import type { Tab, TabChangeEvent } from '@/stubs/shared-core';
 
 interface EnhancedSyncOptions {
   deviceId: string;
