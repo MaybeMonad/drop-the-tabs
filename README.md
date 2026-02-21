@@ -1,285 +1,307 @@
 # 📑 Drop The Tabs
 
 <p align="center">
-  <img src="icon/128.png" alt="Drop The Tabs Logo" width="64" height="64">
+  <strong>Browser tab management with mobile remote control</strong>
 </p>
 
 <p align="center">
-  Intelligent tab management for Chrome — auto-grouping, deduplication, time tracking, and smart reminders.
+  Manage your browser tabs from anywhere — auto-grouping, deduplication, time tracking, & cross-device sync.
 </p>
 
 <p align="center">
   <a href="#-features">Features</a> •
-  <a href="#-installation">Installation</a> •
-  <a href="#-usage">Usage</a> •
-  <a href="#-development">Development</au003e •
-  <a href="#-roadmap">Roadmap</a>
+  <a href="#-architecture">Architecture</a> •
+  <a href="#-quick-start">Quick Start</a> •
+  <a href="#-deployment">Deployment</a>
 </p>
 
 ---
 
 ## ✨ Features
 
-### 🤖 Auto Grouping
-- Automatically organize tabs by domain/type
-- Smart rules for Work 💼, Social 📱, Shopping 🛒, Video 🎬, News 📰, Docs 📄
-- Visual grouping with Chrome's native tab groups
-- One-click manual grouping for specific domains
+### 🧠 Intelligent Tab Management
+- **Auto Grouping** — Organize tabs by domain/type with smart rules
+- **Deduplication** — Remove duplicate tabs, preserve the most recent
+- **Session Management** — Save/restore entire windows or selected tabs
+- **Time Tracking** — Track time spent on each website with daily summaries
 
-### 🧹 Deduplication
-- Remove duplicate tabs with one click
-- Smart URL fingerprinting (ignores tracking parameters)
-- Preserves the most recently active tab
+### 📱 Mobile Remote Control
+- **Real-time Sync** — View and manage browser tabs from your phone
+- **Cross-device** — Supports 3+ browsers + 2+ mobile devices per user
+- **Native Apps** — iOS and Android via Expo
 
-### 💾 Session Management
-- **Save entire window** — Save all current tabs as a named session
-- **Save selected tabs** — Multi-select tabs and save as a session
-- **Save by domain** — Save all tabs from a specific site as a session
-- **Restore sessions** — Open saved sessions in a new window
-- **Delete sessions** — Clean up old sessions
+### 🔐 Privacy First
+- **End-to-end Encryption** — X25519 + AES-256-GCM
+- **Client-side Encryption** — Server only stores encrypted payloads
+- **Offline Support** — Works without internet, syncs when available
 
-### 📊 Time Tracking
-- Track time spent on each website
-- Daily activity summaries
-- Top domains ranking with visual progress bars
-- Persistent local storage
-
-### 🔔 Smart Reminders
-- Get notified when you have too many tabs open (configurable threshold)
-- Cooldown period prevents notification spam
-- Quick actions from notifications
-
-### 📤 Data Export
-Export your tabs and sessions in multiple formats:
-- **CSV** — For Excel/spreadsheet analysis
-- **JSON** — Complete data backup
-- **Markdown** — Import into Obsidian or other note-taking apps
-
-### 🎨 Modern UI
-- Clean, modern interface with Base UI components
-- Dark mode support (follows system preference)
-- Keyboard-friendly interactions
-- Smooth animations and transitions
+### ☁️ Flexible Backend
+- **Firebase** — Managed, serverless, instant deploy
+- **Self-hosted** — Docker Compose with PostgreSQL + Redis
+- **Switch anytime** — Same client, different backend
 
 ---
 
-## 📦 Installation
+## 🏗️ Architecture
 
-### From Chrome Web Store
-_Coming soon..._
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Extension     │◄───►│   Sync Server   │◄───►│   PostgreSQL    │
+│   (Chrome)      │     │   / Firebase    │     │   / Firestore   │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+         │                       │
+         │ WebSocket             │ Redis
+         │                       │
+┌─────────────────┐              │
+│   Mobile App    │◄─────────────┘
+│   (Expo)        │
+└─────────────────┘
+```
 
-### Manual Installation (Development)
+### Monorepo Structure
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/drop-the-tabs.git
-   cd drop-the-tabs
-   ```
+```
+drop-the-tabs/
+├── apps/
+│   ├── extension/           # Chrome Extension (WXT + React)
+│   │   ├── src/
+│   │   │   ├── entrypoints/   # Background, Popup, Options
+│   │   │   ├── hooks/         # usePairing, useSync
+│   │   │   └── services/      # SyncService
+│   │   └── package.json
+│   └── mobile/              # Expo Mobile App (iOS/Android)
+│       ├── app/                 # Expo Router v3
+│       ├── src/
+│       │   ├── database/        # WatermelonDB
+│       │   └── hooks/           # useMobilePairing
+│       └── package.json
+├── packages/
+│   ├── shared-core/         # Types, Encryption (X25519, AES-GCM)
+│   └── shared-api/          # Sync adapters, Pairing utilities
+├── services/
+│   ├── sync-server/         # Docker backend (Fastify + WebSocket)
+│   └── firebase-backend/    # Firebase Functions
+└── turbo.json               # Turborepo config
+```
 
-2. **Install dependencies**
-   ```bash
-   bun install
-   ```
+---
 
-3. **Run development server**
-   ```bash
-   bun run dev
-   ```
+## 🚀 Quick Start
 
-4. **Load the extension**
-   - Open Chrome and navigate to `chrome://extensions/`
-   - Enable "Developer mode" (toggle in top right)
-   - Click "Load unpacked"
-   - Select the `.output/chrome-mv3-dev` folder
+### Prerequisites
 
-### Build for Production
+- **Node.js** 20+ (via [nvm](https://github.com/nvm-sh/nvm))
+- **Bun** 1.0+ (package manager)
+- **Git**
 
 ```bash
-bun run build
+# Install Bun if you don't have it
+curl -fsSL https://bun.sh/install | bash
 ```
 
-The production build will be in `.output/chrome-mv3-prod/` — zip this folder and upload to Chrome Web Store.
-
----
-
-## 🚀 Usage
-
-### Quick Actions (Top Bar)
-
-| Button | Action |
-|--------|--------|
-| 🔄 Refresh | Reload the tab list |
-| 📤 Export | Export data as CSV/JSON/Markdown |
-| 🔍 Auto Group | Group all tabs by domain/rules |
-| 🧹 Deduplicate | Remove duplicate tabs |
-| 💾 Save All | Save all tabs as a session |
-
-### Tabs Tab
-
-**Individual Tab Actions:**
-- ☑️ **Checkbox** — Select multiple tabs for batch operations
-- 📌 **Pin/Unpin** — Pin important tabs
-- 📋 **Duplicate** — Create a copy of the tab
-- ❌ **Close** — Close individual tab
-
-**Group Actions:**
-- Click the **⋮** menu on any group header
-- **Group These Tabs** — Create a Chrome tab group
-- **Save as Session** — Save only this group's tabs
-- **Close All** — Close all tabs in this group (pinned tabs skipped)
-
-**Batch Operations:**
-1. Select multiple tabs using checkboxes
-2. Batch action bar appears at the top
-3. **Save** — Save selected tabs as a session
-4. **Close** — Close all selected tabs
-5. **Cancel** — Clear selection
-
-### Sessions Tab
-
-- **Save Current Session** — Save all current tabs
-- **Restore** — Open session in new window
-- **Delete** — Remove saved session
-
-### Stats Tab
-
-- **Today's Activity** — Total time spent browsing
-- **Top Domains** — Ranked list of most visited sites
-- Visual progress bars for quick comparison
-
----
-
-## 🛠️ Development
-
-### Tech Stack
-
-- **Framework**: [WXT](https://wxt.dev/) + React 18 + TypeScript
-- **UI Components**: [Base UI](https://base-ui.com/) — unstyled, accessible primitives
-- **Styling**: Tailwind CSS
-- **Icons**: Lucide React
-- **Package Manager**: Bun
-- **Storage**: Chrome Storage API + IndexedDB
-
-### Project Structure
-
-```
-src/
-├── entrypoints/
-│   ├── background/
-│   │   └── index.ts      # Service Worker (background script)
-│   ├── popup/
-│   │   ├── index.html
-│   │   └── index.tsx     # Popup entry
-│   ├── options/
-│   │   ├── index.html
-│   │   └── index.tsx     # Settings page
-│   └── content/
-│       └── index.ts      # Content script (if needed)
-├── components/
-│   └── Popup.tsx         # Main UI component
-├── utils/
-│   ├── tabManager.ts     # Tab management logic
-│   ├── statsCollector.ts # Time tracking
-│   ├── autoReminder.ts   # Smart reminders
-│   └── types.ts          # TypeScript types
-├── style.css             # Global styles + Tailwind
-└── assets/               # Icons and images
-```
-
-### Development Workflow
+### 1. Clone & Install
 
 ```bash
-# Start development server
+git clone https://github.com/MaybeMonad/drop-the-tabs.git
+cd drop-the-tabs
+bun install
+```
+
+### 2. Choose Your Backend
+
+#### Option A: Firebase (Recommended for beginners)
+
+```bash
+# Install Firebase CLI
+npm install -g firebase-tools
+
+# Login
+firebase login
+
+# Update project ID in services/firebase-backend/.firebaserc
+echo '{"projects":{"default":"your-firebase-project"}}' > services/firebase-backend/.firebaserc
+
+# Deploy
+bun run deploy:firebase
+```
+
+#### Option B: Docker (Self-hosted)
+
+```bash
+cd services/sync-server
+
+# Start PostgreSQL + Redis + Server
+docker-compose up -d
+
+# Server runs at http://localhost:3000
+```
+
+### 3. Start Extension (Development)
+
+```bash
+# Terminal 1: Extension
+bun run dev:extension
+
+# Or:
+cd apps/extension
 bun run dev
-
-# Type check
-bun run compile
-
-# Build for production
-bun run build
-
-# Create zip for distribution
-bun run zip
 ```
 
-### Adding New Features
+Then load in Chrome:
+1. Open `chrome://extensions/`
+2. Enable "Developer mode"
+3. Click "Load unpacked"
+4. Select `.output/chrome-mv3-dev`
 
-1. **Update types** in `src/utils/types.ts`
-2. **Add logic** in `src/utils/tabManager.ts` or create new utility
-3. **Add UI** in `src/components/Popup.tsx`
-4. **Add message handler** in `src/entrypoints/background/index.ts`
-5. **Update README** with new feature documentation
+### 4. Start Mobile App (Optional)
 
----
+```bash
+# Terminal 2: Mobile
+cd apps/mobile
 
-## 🗺️ Roadmap
+# iOS
+bun run ios
 
-### Phase 1: Core (✅ Complete)
-- [x] Auto-grouping by domain/rules
-- [x] Deduplication
-- [x] Session management
-- [x] Time tracking
-- [x] Data export (CSV/JSON/Markdown)
-- [x] Smart reminders
-
-### Phase 2: Enhanced (In Progress)
-- [ ] Cloud sync across devices
-- [ ] Keyboard shortcuts
-- [ ] Custom grouping rules editor
-- [ ] Suspended tabs (unload inactive tabs)
-- [ ] Search/filter tabs
-
-### Phase 3: Intelligence
-- [ ] AI-powered smart grouping
-- [ ] Usage pattern analysis
-- [ ] Productivity insights
-- [ ] Tab suggestions
-
-### Phase 4: Ecosystem
-- [ ] Firefox support
-- [ ] Safari extension
-- [ ] Mobile companion app
-- [ ] API for integrations
+# Android
+bun run android
+```
 
 ---
 
-## 🔒 Privacy
+## 📱 Pairing Flow
 
-- ✅ **All data stored locally** — Nothing leaves your device
-- ✅ **No analytics or tracking** — We don't collect usage data
-- ✅ **No external servers** — Works entirely offline
-- ✅ **Optional exclusions** — Exclude specific domains from tracking
+### Extension → Mobile
+
+1. **Extension**: Open Options page → Start Pairing
+2. **Extension**: Shows QR code + 6-digit pairing code
+3. **Mobile**: Scan QR or enter pairing code
+4. **Mobile**: Paired! Real-time sync begins
+
+### Backend API
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/pairing/code` | POST | Generate 6-digit code |
+| `/pairing/pair` | POST | Pair devices |
+| `/pairing/status/:code` | GET | Check pairing status |
+| `/sync/publish` | POST | Publish encrypted data |
+| `/sync/data` | GET | Get latest sync |
+| `/ws` | WebSocket | Real-time connection |
+
+---
+
+## 🛠️ Development Commands
+
+```bash
+# All commands from repo root
+
+# Development
+bun run dev:extension    # Extension only
+bun run dev:mobile       # Mobile only
+bun run dev:server       # Docker backend
+bun run dev:firebase     # Firebase emulators
+
+# Build
+bun run build            # Build all packages
+
+# Deploy
+bun run deploy:firebase          # Deploy Firebase functions
+bun run deploy:firebase:rules    # Deploy Firestore rules only
+
+# Misc
+bun run lint             # Lint all
+bun run type-check       # Type check all
+bun run clean            # Clean build artifacts
+```
+
+---
+
+## 📦 Deployment
+
+### Extension → Chrome Web Store
+
+```bash
+cd apps/extension
+bun run build
+
+# Zip for upload
+cd .output/chrome-mv3-prod && zip -r ../../../extension.zip .
+```
+
+### Mobile → App Stores
+
+```bash
+cd apps/mobile
+
+# Build for stores
+bun run build
+
+# Or use EAS
+npx eas build --platform ios
+npx eas build --platform android
+```
+
+### Backend → Production
+
+**Firebase (Recommended)**
+```bash
+bun run deploy:firebase
+```
+
+**Docker**
+```bash
+cd services/sync-server
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+---
+
+## 🧪 Tech Stack
+
+| Layer | Tech |
+|-------|------|
+| **Extension** | WXT, React 18, TypeScript, Tailwind CSS |
+| **Mobile** | Expo SDK 51, React Native, NativeWind |
+| **Shared** | TypeScript, X25519, AES-256-GCM |
+| **Backend (Firebase)** | Cloud Functions, Firestore, Firebase Auth |
+| **Backend (Docker)** | Fastify, WebSocket, PostgreSQL, Redis |
+| **Monorepo** | Turborepo, Bun |
+
+---
+
+## 🔒 Security
+
+- **E2E Encryption**: All sync data encrypted with X25519 key exchange
+- **Zero-knowledge**: Server cannot decrypt tab data
+- **Anonymous Auth**: No personal data required
+- **Local-first**: Works offline, syncs when online
 
 ---
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+```bash
+# Fork and clone
+git clone https://github.com/yourusername/drop-the-tabs.git
 
-### Ways to Contribute
+# Create branch
+git checkout -b feature/your-feature
 
-- 🐛 Report bugs via [GitHub Issues](https://github.com/yourusername/drop-the-tabs/issues)
-- 💡 Suggest features via [GitHub Discussions](https://github.com/yourusername/drop-the-tabs/discussions)
-- 📝 Improve documentation
-- 🔧 Submit pull requests
+# Commit with conventional commits
+git commit -m "feat: add amazing feature"
+
+# Push and PR
+git push origin feature/your-feature
+```
 
 ---
 
 ## 📄 License
 
-MIT License — see [LICENSE](LICENSE) for details.
-
----
-
-## 🙏 Acknowledgments
-
-- [WXT](https://wxt.dev/) — Modern web extension toolkit
-- [Base UI](https://base-ui.com/) — Unstyled accessible components
-- [Tailwind CSS](https://tailwindcss.com/) — Utility-first CSS framework
-- [Lucide](https://lucide.dev/) — Beautiful icons
+MIT License — see [LICENSE](LICENSE)
 
 ---
 
 <p align="center">
-  Made with ❤️ for tab hoarders everywhere
+  Built with 💎 by KK + Tony for Fried.gg
 </p>
