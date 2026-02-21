@@ -1,0 +1,27 @@
+{
+  "name": "@drop-the-tabs/extension",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "compile": "tsc --noEmit",
+    "clean": "rm -rf .output"
+  },
+  "dependencies": {
+    "@drop-the-tabs/shared-core": "workspace:*",
+    "@drop-the-tabs/shared-api": "workspace:*",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@base-ui-components/react": "^1.0.0",
+    "lucide-react": "^0.460.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.46",
+    "@types/react-dom": "^18.2.18",
+    "@wxt-dev/module-react": "^1.0.0",
+    "typescript": "^5.3.3",
+    "wxt": "^0.19.0"
+  }
+}
