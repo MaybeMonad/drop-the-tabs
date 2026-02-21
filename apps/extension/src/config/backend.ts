@@ -35,7 +35,7 @@ export const BACKEND_CONFIGS: Record<BackendType, BackendConfig> = {
 
 // Get the actual Firebase URL (replace YOUR_PROJECT_ID)
 export function getFirebaseUrl(projectId?: string): string {
-  const id = projectId || 'drop-the-tabs-prod';
+  const id = projectId || 'drop-the-tabs';  // 使用实际项目 ID
   return `https://us-central1-${id}.cloudfunctions.net/api`;
 }
 
