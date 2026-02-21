@@ -10,6 +10,9 @@ pnpm-lock.yaml
 dist/
 *.zip
 
+# Monorepo / Turbo
+.turbo/
+
 # IDE
 .vscode/
 .idea/
@@ -35,3 +38,15 @@ coverage/
 # Temporary files
 *.tmp
 *.temp
+
+# Generated type definitions (WXT)
+.wxt/
+
+# Expo
+.expo/
+ios/
+android/
+firebase-debug.log
+
+# NativeWind
+nativewind-env.d.ts
