@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Camera as CameraIcon } from 'lucide-react-native';
+import { ArrowLeft } from 'lucide-react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useMobilePairing } from '../../src/hooks/useMobilePairing';
 import { useAppStore } from '../../src/stores/appStore';
@@ -11,9 +11,9 @@ export default function ScanScreen() {
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanning, setScanning] = useState(false);
-  const [deviceId, setDeviceId] = useState('');
+  const [localDeviceId, setLocalDeviceId] = useState('');
   const { isPairing, result, pairWithQR } = useMobilePairing();
-  const { setSyncConfig } = useAppStore();
+  const { setSyncConfig, setDeviceId } = useAppStore();
 
   useEffect(() => {
     if (permission?.granted) {
@@ -22,10 +22,10 @@ export default function ScanScreen() {
   }, [permission]);
 
   useEffect(() => {
-    // Get or generate device ID
     const id = `mobile_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    setLocalDeviceId(id);
     setDeviceId(id);
-  }, []);
+  }, [setDeviceId]);
 
   useEffect(() => {
     if (result) {
@@ -57,7 +57,7 @@ export default function ScanScreen() {
   const handleBarCodeScanned = ({ data }: { data: string }) => {
     if (isPairing) return;
     setScanning(false);
-    pairWithQR(data, deviceId, 'Mobile Device');
+    pairWithQR(data, localDeviceId, 'Mobile Device');
   };
 
   if (!permission) {
@@ -73,10 +73,7 @@ export default function ScanScreen() {
     return (
       <SafeAreaView className="flex-1 bg-background p-4">
         <View className="flex-1 items-center justify-center">
-          <CameraIcon size={64} className="text-muted-foreground mb-4" />
-          <Text className="text-foreground text-lg mb-4 text-center">
-            Camera access is needed to scan QR codes
-          </Text>
+          <Text className="text-foreground text-lg mb-4 text-center">Camera access is needed to scan QR codes</Text>
           <TouchableOpacity 
             onPress={requestPermission}
             className="bg-primary px-6 py-3 rounded-lg"
@@ -90,7 +87,6 @@ export default function ScanScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-black">
-      {/* Header */}
       <View className="absolute top-0 left-0 right-0 z-10 flex-row items-center justify-between px-4 py-3">
         <TouchableOpacity 
           onPress={() => router.back()} 
@@ -100,19 +96,15 @@ export default function ScanScreen() {
         </TouchableOpacity>
         
         <Text className="text-white text-lg font-semibold">Scan QR Code</Text>
-        
         <View className="w-10" />
       </View>
 
-      {/* Camera */}
       {scanning && !isPairing ? (
         <CameraView
           style={StyleSheet.absoluteFillObject}
           facing="back"
           onBarcodeScanned={handleBarCodeScanned}
-          barcodeScannerSettings={{
-            barcodeTypes: ['qr'],
-          }}
+          barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
         />
       ) : (
         <View className="flex-1 items-center justify-center bg-black">
@@ -121,7 +113,6 @@ export default function ScanScreen() {
         </View>
       )}
 
-      {/* Scanner Overlay */}
       <View className="absolute inset-0 pointer-events-none">
         <View className="absolute top-1/4 left-8 right-8 aspect-square">
           <View className="absolute inset-0 border-2 border-white/30 rounded-3xl" />
@@ -132,11 +123,8 @@ export default function ScanScreen() {
         </View>
       </View>
 
-      {/* Bottom Options */}
       <View className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 to-transparent">
-        <Text className="text-white/70 text-center mb-4">
-          Point camera at the QR code in your browser extension
-        </Text>
+        <Text className="text-white/70 text-center mb-4">Point camera at the QR code in your browser extension</Text>
         
         <TouchableOpacity 
           onPress={() => router.push('/pair-code')}

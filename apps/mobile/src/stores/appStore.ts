@@ -6,9 +6,13 @@ import type { Device, Tab, Session, AdapterConfig } from '@drop-the-tabs/shared-
 interface AppState {
   // Sync
   syncConfig: AdapterConfig | null;
+  userId: string | null;
+  deviceId: string | null;
   isConnected: boolean;
   isUsingFallback: boolean;
   setSyncConfig: (config: AdapterConfig | null) => void;
+  setUserId: (userId: string | null) => void;
+  setDeviceId: (deviceId: string | null) => void;
   setConnectionStatus: (connected: boolean, fallback?: boolean) => void;
 
   // Devices
@@ -39,9 +43,13 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       // Sync
       syncConfig: null,
+      userId: null,
+      deviceId: null,
       isConnected: false,
       isUsingFallback: false,
       setSyncConfig: (config) => set({ syncConfig: config }),
+      setUserId: (userId) => set({ userId }),
+      setDeviceId: (deviceId) => set({ deviceId }),
       setConnectionStatus: (connected, fallback = false) => 
         set({ isConnected: connected, isUsingFallback: fallback }),
 
@@ -72,6 +80,8 @@ export const useAppStore = create<AppState>()(
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         syncConfig: state.syncConfig,
+        userId: state.userId,
+        deviceId: state.deviceId,
         selectedDeviceId: state.selectedDeviceId,
       }),
     }

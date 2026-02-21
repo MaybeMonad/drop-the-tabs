@@ -15,14 +15,15 @@ import { useAppStore } from '../src/stores/appStore';
 export default function PairCodeScreen() {
   const router = useRouter();
   const [code, setCode] = useState(['', '', '', '', '', '']);
-  const [deviceId, setDeviceId] = useState('');
+  const [localDeviceId, setLocalDeviceId] = useState('');
   const { isPairing, result, pairWithCode } = useMobilePairing();
-  const { setSyncConfig } = useAppStore();
+  const { setSyncConfig, setDeviceId } = useAppStore();
 
   useEffect(() => {
     const id = `mobile_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    setLocalDeviceId(id);
     setDeviceId(id);
-  }, []);
+  }, [setDeviceId]);
 
   useEffect(() => {
     if (result) {
@@ -60,7 +61,6 @@ export default function PairCodeScreen() {
     newCode[currentIndex] = digit;
     setCode(newCode);
 
-    // Auto-submit if complete
     if (currentIndex === 5) {
       const fullCode = [...newCode].join('');
       handleSubmit(fullCode);
@@ -82,12 +82,11 @@ export default function PairCodeScreen() {
       Alert.alert('Invalid Code', 'Please enter a 6-digit code');
       return;
     }
-    pairWithCode(fullCode, deviceId, 'Mobile Device');
+    pairWithCode(fullCode, localDeviceId, 'Mobile Device');
   };
 
   return (
     <SafeAreaView className="flex-1 bg-background">
-      {/* Header */}
       <View className="flex-row items-center px-4 py-3 border-b border-border">
         <TouchableOpacity 
           onPress={() => router.back()} 
@@ -96,7 +95,6 @@ export default function PairCodeScreen() {
         >
           <ArrowLeft size={24} className="text-foreground" />
         </TouchableOpacity>
-        
         <Text className="flex-1 text-lg font-semibold text-foreground text-center">
           Enter Pairing Code
         </Text>
@@ -104,12 +102,10 @@ export default function PairCodeScreen() {
       </View>
 
       <View className="flex-1 p-6">
-        {/* Instructions */}
         <Text className="text-center text-muted-foreground mb-8">
           Enter the 6-digit code from your browser extension
         </Text>
 
-        {/* Code Display */}
         <View className="flex-row justify-center gap-3 mb-8">
           {code.map((digit, index) => (
             <View
@@ -129,7 +125,6 @@ export default function PairCodeScreen() {
           ))}
         </View>
 
-        {/* Keypad */}
         <View className="flex-1 justify-end">
           <View className="flex-row flex-wrap justify-center gap-3">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (

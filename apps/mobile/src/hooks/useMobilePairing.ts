@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
-import { generateKeyPair, arrayBufferToBase64 } from '@drop-the-tabs/shared-api';
+import { useAppStore } from '../stores/appStore';
 
-const PAIRING_SERVER_URL = 'http://localhost:3000'; // Update with your server URL
+const PAIRING_SERVER_URL = 'http://localhost:3000';
 
 interface PairingResult {
   success: boolean;
@@ -23,6 +23,7 @@ interface UseMobilePairingReturn {
 export function useMobilePairing(): UseMobilePairingReturn {
   const [isPairing, setIsPairing] = useState(false);
   const [result, setResult] = useState<PairingResult | null>(null);
+  const { setUserId, setDeviceId } = useAppStore();
 
   const pairWithCode = useCallback(async (
     code: string,
@@ -33,9 +34,6 @@ export function useMobilePairing(): UseMobilePairingReturn {
     setResult(null);
 
     try {
-      // Generate key pair
-      const keyPair = await generateKeyPair();
-      
       const response = await fetch(`${PAIRING_SERVER_URL}/api/pairing/pair`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -55,16 +53,16 @@ export function useMobilePairing(): UseMobilePairingReturn {
 
       const data = await response.json();
       
+      // Save to store
+      setUserId(data.userId);
+      setDeviceId(deviceId);
+      
       setResult({
         success: true,
         userId: data.userId,
         anonymousId: data.anonymousId,
         pairedDeviceId: data.pairedDeviceId,
       });
-
-      // TODO: Store keys and user info securely
-      // await SecureStore.setItemAsync('userId', data.userId);
-      // await SecureStore.setItemAsync('privateKey', arrayBufferToBase64(keyPair.privateKey));
 
     } catch (error) {
       setResult({
@@ -74,7 +72,7 @@ export function useMobilePairing(): UseMobilePairingReturn {
     } finally {
       setIsPairing(false);
     }
-  }, []);
+  }, [setUserId, setDeviceId]);
 
   const pairWithQR = useCallback(async (
     qrData: string,
@@ -85,24 +83,10 @@ export function useMobilePairing(): UseMobilePairingReturn {
     setResult(null);
 
     try {
-      // Parse QR data (format: did=<deviceId>&pk=<publicKey>&ts=<timestamp>&sig=<signature>)
+      // Parse QR data
       const params = new URLSearchParams(qrData);
-      const pairedDeviceId = params.get('did');
-      const pairedPublicKeyBase64 = params.get('pk');
-
-      if (!pairedDeviceId || !pairedPublicKeyBase64) {
-        throw new Error('Invalid QR code');
-      }
-
-      // Generate our own key pair
-      const keyPair = await generateKeyPair();
-
-      // TODO: Implement direct QR pairing (without code)
-      // This requires a different API endpoint for direct pairing
-
-      // For now, fall back to code-based pairing
-      // The QR code could contain a short-lived pairing code
       const pairingCode = params.get('code');
+      
       if (pairingCode) {
         await pairWithCode(pairingCode, deviceId, deviceName);
       } else {
@@ -134,6 +118,5 @@ export function useMobilePairing(): UseMobilePairingReturn {
 }
 
 function getOS(): string {
-  // Simple OS detection for mobile
-  return 'iOS'; // or 'Android' based on Platform
+  return 'iOS';
 }
