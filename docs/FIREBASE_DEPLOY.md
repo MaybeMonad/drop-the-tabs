@@ -97,7 +97,7 @@ https://us-central1-<project-id>.cloudfunctions.net/api
 
 Example:
 ```
-https://us-central1-drop-the-tabs-prod.cloudfunctions.net/api/health
+https://us-central1-drop-the-tabs.cloudfunctions.net/api/health
 ```
 
 ## Update Clients

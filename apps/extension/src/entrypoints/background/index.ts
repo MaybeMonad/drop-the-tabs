@@ -1,10 +1,9 @@
 // Background script for Drop The Tabs Extension
 import { defineBackground } from 'wxt/sandbox';
-import { DirectSyncService, getSyncService } from '@/services/directSync';
+import { getFirebaseSyncService } from '@/services/firebaseSync';
 import { TabManager } from '@/utils/tabManager';
 import { StatsCollector } from '@/utils/statsCollector';
 import { AutoReminder } from '@/utils/autoReminder';
-import type { Tab } from '@drop-the-tabs/shared-core';
 
 export default defineBackground(() => {
   console.log('[DTT] Background script starting...');
@@ -12,30 +11,16 @@ export default defineBackground(() => {
   const tabManager = new TabManager();
   const statsCollector = new StatsCollector();
   const autoReminder = new AutoReminder();
-  const syncService = getSyncService();
+  const syncService = getFirebaseSyncService();
 
   // Initialize on startup
   initializeExtension();
 
   async function initializeExtension(): Promise<void> {
     try {
-      // Load backend config
-      const result = await chrome.storage.local.get(['backend_config', 'sync_userId']);
-      
-      if (result.backend_config?.apiUrl) {
-        // Initialize sync service
-        await syncService.initialize(result.backend_config.apiUrl);
-        
-        // If we have a userId from previous pairing, restore it
-        if (result.sync_userId) {
-          await syncService.setUserId(result.sync_userId);
-          console.log('[DTT] Sync restored for user:', result.sync_userId);
-        }
-        
-        console.log('[DTT] Sync service ready');
-      }
-
-      console.log('[DTT] Extension initialized');
+      // Initialize Firebase sync
+      await syncService.initialize();
+      console.log('[DTT] Extension initialized, userId:', syncService.getUserId());
     } catch (error) {
       console.error('[DTT] Init error:', error);
     }
@@ -120,28 +105,12 @@ export default defineBackground(() => {
             sendResponse({ success: true, data: tabs });
             break;
             
-          case 'initSync':
-            // Called after successful pairing
-            if (request.apiUrl) {
-              await chrome.storage.local.set({ 
-                backend_config: { apiUrl: request.apiUrl },
-                sync_userId: request.userId 
-              });
-              
-              await syncService.initialize(request.apiUrl);
-              await syncService.setUserId(request.userId);
-              
-              sendResponse({ success: true, deviceId: syncService.getDeviceId() });
-            } else {
-              sendResponse({ success: false, error: 'Missing apiUrl' });
-            }
-            break;
-
           case 'getSyncStatus':
             sendResponse({
               success: true,
               connected: syncService.isConnected(),
               deviceId: syncService.getDeviceId(),
+              userId: syncService.getUserId(),
             });
             break;
             
