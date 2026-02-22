@@ -5,8 +5,13 @@ import { TabManager } from '@/utils/tabManager';
 import { StatsCollector } from '@/utils/statsCollector';
 import { AutoReminder } from '@/utils/autoReminder';
 
+import { getInboxZeroController } from '@/services/inboxZero';
+
 export default defineBackground(() => {
   console.log('[DTT] Background script starting...');
+
+  // Initialize Inbox Zero controller
+  getInboxZeroController();
 
   const tabManager = new TabManager();
   const statsCollector = new StatsCollector();
