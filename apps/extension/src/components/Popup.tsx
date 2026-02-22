@@ -437,19 +437,26 @@ export default function Popup() {
   };
 
   const handleExport = async (format: "json" | "csv" | "markdown") => {
-    const response = await chrome.runtime.sendMessage({
-      action: "exportData",
-      format,
-    });
-    if (response.success) {
-      const blob = new Blob([response.data], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `drop-the-tabs-${new Date().toISOString().slice(0, 10)}.${format === "markdown" ? "md" : format}`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showMessage(`Exported as ${format.toUpperCase()}`, "success");
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: "exportData",
+        format,
+      });
+      if (response.success) {
+        const blob = new Blob([response.data], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.style.display = "none";
+        a.href = url;
+        a.download = `drop-the-tabs-${new Date().toISOString().slice(0, 10)}.${format === "markdown" ? "md" : format}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showMessage(`Exported as ${format.toUpperCase()}`, "success");
+      }
+    } catch (error) {
+      showMessage("Export failed", "error");
     }
   };
 
@@ -534,7 +541,7 @@ export default function Popup() {
               transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
               className="mb-3"
             >
-              <GlassCard className="p-3">
+              <GlassCard className="p-3 overflow-hidden">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-lg bg-purple-50 flex items-center justify-center">
@@ -551,14 +558,16 @@ export default function Popup() {
                     <X className="w-3.5 h-3.5 text-zinc-400" weight="regular" />
                   </button>
                 </div>
-                <ExportPanel
-                  tabs={filteredTabs}
-                  selectedTabIds={selectedTabs}
-                  onExportComplete={() => {
-                    setShowExport(false);
-                    showMessage("Exported to Downloads", "success");
-                  }}
-                />
+                <div className="max-h-[300px] overflow-y-auto pr-1">
+                  <ExportPanel
+                    tabs={filteredTabs}
+                    selectedTabIds={selectedTabs}
+                    onExportComplete={() => {
+                      setShowExport(false);
+                      showMessage("Exported to Downloads", "success");
+                    }}
+                  />
+                </div>
               </GlassCard>
             </motion.div>
           )}
