@@ -303,5 +303,5 @@ MIT License — see [LICENSE](LICENSE)
 ---
 
 <p align="center">
-  Built with 💎 by KK + Tony for Fried.gg
+  Built with 💎 by Leo
 </p>
