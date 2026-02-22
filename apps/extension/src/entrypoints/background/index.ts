@@ -134,6 +134,21 @@ export default defineBackground(() => {
             sendResponse({ success: true, data: sessions });
             break;
             
+          case 'saveCustomSession':
+            await tabManager.saveCustomSession(request.session);
+            sendResponse({ success: true });
+            break;
+            
+          case 'deleteSession':
+            await tabManager.deleteSession(request.sessionId);
+            sendResponse({ success: true });
+            break;
+            
+          case 'restoreSession':
+            await tabManager.restoreSession(request.sessionId);
+            sendResponse({ success: true });
+            break;
+            
           case 'getStats':
             const stats = await statsCollector.getStats();
             sendResponse({ success: true, data: stats });

@@ -1,5 +1,5 @@
 import { defineConfig } from 'wxt';
-import { cpSync } from 'fs';
+import { cpSync, readFileSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 
 export default defineConfig({
@@ -52,15 +52,34 @@ export default defineConfig({
     },
     plugins: [
       {
-        name: 'copy-public',
+        name: 'post-build-fixes',
         closeBundle() {
           const publicDir = resolve('./public');
           const outDir = resolve('../../.output/extension/chrome-mv3');
+          
+          // Copy public files
           try {
             cpSync(publicDir, outDir, { recursive: true, force: true });
             console.log('[wxt] Copied public files to output');
           } catch (e) {
             console.error('[wxt] Failed to copy public files:', e);
+          }
+          
+          // Fix HTML paths (WXT uses absolute paths which don't work in extensions)
+          try {
+            const files = ['popup.html', 'options.html'];
+            for (const file of files) {
+              const filePath = resolve(outDir, file);
+              let content = readFileSync(filePath, 'utf-8');
+              // Replace absolute paths with relative paths
+              content = content.replace(/src="\/chunks\//g, 'src="./chunks/');
+              content = content.replace(/href="\/chunks\//g, 'href="./chunks/');
+              content = content.replace(/href="\/assets\//g, 'href="./assets/');
+              writeFileSync(filePath, content);
+            }
+            console.log('[wxt] Fixed HTML paths');
+          } catch (e) {
+            console.error('[wxt] Failed to fix HTML paths:', e);
           }
         }
       }
