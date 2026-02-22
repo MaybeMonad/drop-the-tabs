@@ -249,6 +249,25 @@ export default defineBackground(() => {
             sendResponse({ success: true, data: statusStats });
             break;
 
+          // Obsidian Export (Phase 2)
+          case 'exportToObsidian':
+            const { exportToObsidian } = await import('@/services/obsidianExport');
+            const exportResult = await exportToObsidian(request.tabs, request.options);
+            sendResponse(exportResult);
+            break;
+
+          case 'exportAsSession':
+            const { exportAsSession } = await import('@/services/obsidianExport');
+            const sessionResult = await exportAsSession(request.name, request.tabs, request.options);
+            sendResponse(sessionResult);
+            break;
+
+          case 'copyAsMarkdownList':
+            const { copyAsMarkdownList } = await import('@/services/obsidianExport');
+            await copyAsMarkdownList(request.tabs);
+            sendResponse({ success: true });
+            break;
+
           default:
             sendResponse({ success: false, error: 'Unknown action' });
         }
