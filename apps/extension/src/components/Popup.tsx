@@ -29,7 +29,6 @@ import {
   Archive,
   RefreshCw,
   Check,
-  Tag,
 } from 'lucide-react';
 import type { TabInfo, Session, TabStats } from '../utils/types';
 import '../style.css';
@@ -43,6 +42,7 @@ import {
   StatusFilter,
   TabQuickActions,
 } from './CategoryUI';
+import { ExportPanel } from './ExportPanel';
 import type { ContentCategory, TabStatus, TabPriority, CategorizedTab } from '../utils/contentCategory';
 import { CATEGORY_META, STATUS_META, PRIORITY_META, categorizeTab, detectCategory } from '../utils/contentCategory';
 
@@ -209,6 +209,9 @@ export default function Popup() {
     deviceId: null as string | null,
   });
 
+  // Export panel
+  const [showExportPanel, setShowExportPanel] = useState(false);
+
   useEffect(() => {
     loadData();
     checkSyncStatus();
@@ -250,7 +253,6 @@ export default function Popup() {
     ]);
     if (catResponse.success) setCategoryStats(catResponse.data);
     if (statusResponse.success) setStatusStats(statusResponse.data);
-  };
   };
 
   const loadSessions = async () => {
@@ -802,7 +804,27 @@ export default function Popup() {
               <Save className="w-3.5 h-3.5" />
               {loading === 'save' ? 'Saving...' : 'Save All'}
             </Button>
+            
+            <Button
+              onClick={() => setShowExportPanel(!showExportPanel)}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700 transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Export
+            </Button>
           </div>
+        )}
+        
+        {/* Export Panel */}
+        {showExportPanel && (
+          <ExportPanel
+            tabs={filteredTabs}
+            selectedTabIds={selectedTabs}
+            onExportComplete={() => {
+              setShowExportPanel(false);
+              showMessage('Exported to Downloads folder', 'success');
+            }}
+          />
         )}
       </div>
 

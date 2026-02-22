@@ -2,14 +2,26 @@
 export {}
 declare global {
   const AutoReminder: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/autoReminder')['AutoReminder']
+  const CATEGORY_META: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/contentCategory')['CATEGORY_META']
+  const CATEGORY_RULES: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/contentCategory')['CATEGORY_RULES']
+  const CategoryBadge: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/components/CategoryUI')['CategoryBadge']
+  const CategoryFilter: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/components/CategoryUI')['CategoryFilter']
   const ContentScriptContext: typeof import('wxt/client')['ContentScriptContext']
+  const ExportPanel: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/components/ExportPanel')['ExportPanel']
   const InvalidMatchPattern: typeof import('wxt/sandbox')['InvalidMatchPattern']
   const MatchPattern: typeof import('wxt/sandbox')['MatchPattern']
   const MigrationError: typeof import('wxt/storage')['MigrationError']
+  const PRIORITY_META: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/contentCategory')['PRIORITY_META']
   const Popup: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/components/Popup')['default']
+  const PriorityBadge: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/components/CategoryUI')['PriorityBadge']
+  const STATUS_META: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/contentCategory')['STATUS_META']
   const StatsCollector: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/statsCollector')['StatsCollector']
+  const StatusBadge: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/components/CategoryUI')['StatusBadge']
+  const StatusFilter: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/components/CategoryUI')['StatusFilter']
   const TabManager: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/tabManager')['TabManager']
+  const TabQuickActions: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/components/CategoryUI')['TabQuickActions']
   const browser: typeof import('wxt/browser/chrome')['browser']
+  const categorizeTab: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/contentCategory')['categorizeTab']
   const createIframeUi: typeof import('wxt/client')['createIframeUi']
   const createIntegratedUi: typeof import('wxt/client')['createIntegratedUi']
   const createShadowRootUi: typeof import('wxt/client')['createShadowRootUi']
@@ -19,7 +31,11 @@ declare global {
   const defineContentScript: typeof import('wxt/sandbox')['defineContentScript']
   const defineUnlistedScript: typeof import('wxt/sandbox')['defineUnlistedScript']
   const defineWxtPlugin: typeof import('wxt/sandbox')['defineWxtPlugin']
+  const detectCategory: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/contentCategory')['detectCategory']
+  const estimateReadTime: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/contentCategory')['estimateReadTime']
   const fakeBrowser: typeof import('wxt/testing')['fakeBrowser']
+  const groupByCategory: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/contentCategory')['groupByCategory']
+  const groupByStatus: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/contentCategory')['groupByStatus']
   const injectScript: typeof import('wxt/client')['injectScript']
   const storage: typeof import('wxt/storage')['storage']
   const useAppConfig: typeof import('wxt/client')['useAppConfig']
@@ -38,6 +54,9 @@ declare global {
   // @ts-ignore
   export type { AutoReminder } from '/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/autoReminder'
   import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/autoReminder')
+  // @ts-ignore
+  export type { ContentCategory, TabStatus, TabPriority, CategorizedTab } from '/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/contentCategory'
+  import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/contentCategory')
   // @ts-ignore
   export type { StatsCollector } from '/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/statsCollector'
   import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/statsCollector')
