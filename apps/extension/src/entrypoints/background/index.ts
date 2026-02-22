@@ -268,6 +268,11 @@ export default defineBackground(() => {
             sendResponse({ success: true });
             break;
 
+          case 'exportData':
+            const data = await tabManager.exportData(request.format);
+            sendResponse({ success: true, data });
+            break;
+
           default:
             sendResponse({ success: false, error: 'Unknown action' });
         }

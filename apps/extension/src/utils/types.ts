@@ -7,6 +7,15 @@ export interface TabInfo {
   groupId: number;
   active: boolean;
   lastAccessed?: number;
+  // Categorization fields
+  domain?: string;
+  category?: 'video' | 'social' | 'code' | 'article' | 'shopping' | 'design' | 'news' | 'other';
+  status?: 'unread' | 'reading' | 'done' | 'archived';
+  priority?: 'high' | 'medium' | 'low';
+  notes?: string;
+  tags?: string[];
+  savedAt?: number;
+  estimatedReadTime?: number;
 }
 
 export interface Session {

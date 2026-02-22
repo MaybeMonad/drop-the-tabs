@@ -10,13 +10,15 @@
     "clean": "rm -rf .output"
   },
   "dependencies": {
-    "@drop-the-tabs/shared-core": "workspace:*",
-    "@drop-the-tabs/shared-api": "workspace:*",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
     "@base-ui-components/react": "^1.0.0-rc.0",
+    "@drop-the-tabs/shared-api": "workspace:*",
+    "@drop-the-tabs/shared-core": "workspace:*",
+    "@phosphor-icons/react": "^2.1.10",
+    "firebase": "^10.0.0",
+    "framer-motion": "^12.34.3",
     "lucide-react": "^0.460.0",
-    "firebase": "^10.0.0"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.46",
