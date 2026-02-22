@@ -401,6 +401,125 @@ function DailyTabsChart({ data }: { data: DailyTabCount[] }) {
   );
 }
 
+// Tab Distribution Chart - macOS Storage style
+interface DomainData {
+  domain: string;
+  count: number;
+  color: string;
+}
+
+const DOMAIN_COLORS = [
+  '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
+  '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9',
+  '#F8C471', '#82E0AA', '#F1948A', '#85C1E9', '#D7BDE2',
+];
+
+function TabDistributionChart({ tabs }: { tabs: TabInfo[] }) {
+  const domainData = useMemo(() => {
+    const counts = new Map<string, number>();
+    tabs.forEach(tab => {
+      try {
+        const domain = new URL(tab.url).hostname.replace(/^www\./, '') || 'Other';
+        counts.set(domain, (counts.get(domain) || 0) + 1);
+      } catch {
+        counts.set('Other', (counts.get('Other') || 0) + 1);
+      }
+    });
+    
+    const sorted = Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+    
+    return sorted.map(([domain, count], i) => ({
+      domain,
+      count,
+      color: DOMAIN_COLORS[i % DOMAIN_COLORS.length],
+    }));
+  }, [tabs]);
+
+  const total = tabs.length;
+  
+  if (total === 0) {
+    return (
+      <GlassCard className="p-6 text-center">
+        <ChartBar className="w-8 h-8 text-zinc-200 mx-auto mb-2" weight="regular" />
+        <p className="text-xs text-zinc-500">No tabs to visualize</p>
+      </GlassCard>
+    );
+  }
+
+  return (
+    <GlassCard className="p-4">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-xs font-semibold text-zinc-900">Tab Distribution</h3>
+          <p className="text-[9px] text-zinc-500">By domain</p>
+        </div>
+        <span className="text-lg font-bold text-zinc-900">{total} tabs</span>
+      </div>
+
+      {/* Horizontal Bar Chart */}
+      <div className="mb-4">
+        <div className="h-4 bg-zinc-100 rounded-full overflow-hidden flex">
+          {domainData.map((item) => (
+            <motion.div
+              key={item.domain}
+              initial={{ width: 0 }}
+              animate={{ width: `${(item.count / total) * 100}%` }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+              className="h-full relative group cursor-pointer"
+              style={{ backgroundColor: item.color }}
+            >
+              {/* Tooltip on hover */}
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 text-white text-[9px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                {item.domain}: {item.count} ({Math.round((item.count / total) * 100)}%)
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+
+      {/* Legend & List */}
+      <div className="space-y-2 max-h-[200px] overflow-y-auto scrollbar-thin">
+        {domainData.map((item) => (
+          <div key={item.domain} className="flex items-center gap-2">
+            <div 
+              className="w-2.5 h-2.5 rounded-full flex-shrink-0" 
+              style={{ backgroundColor: item.color }}
+            />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium text-zinc-700 truncate">
+                  {item.domain}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-semibold text-zinc-900">
+                    {item.count}
+                  </span>
+                  <span className="text-[9px] text-zinc-400">
+                    {Math.round((item.count / total) * 100)}%
+                  </span>
+                </div>
+              </div>
+              {/* Mini bar */}
+              <div className="h-1 bg-zinc-100 rounded-full overflow-hidden mt-0.5">
+                <motion.div
+                  className="h-full rounded-full"
+                  style={{ backgroundColor: item.color }}
+                  initial={{ width: 0 }}
+                  animate={{ width: `${(item.count / total) * 100}%` }}
+                  transition={{ duration: 0.4 }}
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </GlassCard>
+  );
+}
+
 // Optimized Virtual Tab List with reduced re-renders
 const VirtualTabList = React.memo(({
   tabs,
@@ -1707,6 +1826,9 @@ export default function Popup() {
                   </div>
                   <DailyTabsChart data={dailyTabCounts} />
                 </GlassCard>
+
+                {/* Tab Distribution - macOS Storage Style */}
+                <TabDistributionChart tabs={tabs} />
 
                 {/* Top Domains */}
                 <div>
