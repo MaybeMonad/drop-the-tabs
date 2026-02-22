@@ -29,6 +29,7 @@ import {
   Archive,
   RefreshCw,
   Check,
+  Sparkles,
 } from 'lucide-react';
 import type { TabInfo, Session, TabStats } from '../utils/types';
 import '../style.css';
@@ -43,6 +44,7 @@ import {
   TabQuickActions,
 } from './CategoryUI';
 import { ExportPanel } from './ExportPanel';
+import { NaturalLanguageCommand } from './NaturalLanguageCommand';
 import type { ContentCategory, TabStatus, TabPriority, CategorizedTab } from '../utils/contentCategory';
 import { CATEGORY_META, STATUS_META, PRIORITY_META, categorizeTab, detectCategory } from '../utils/contentCategory';
 
@@ -882,6 +884,7 @@ export default function Popup() {
             { id: 'current', label: 'Tabs', icon: Globe },
             { id: 'sessions', label: 'Sessions', icon: Archive },
             { id: 'stats', label: 'Stats', icon: BarChart3 },
+            { id: 'ai', label: 'AI', icon: Sparkles },
           ].map((tab) => (
             <Tabs.Tab
               key={tab.id}
@@ -1148,6 +1151,16 @@ export default function Popup() {
               )}
             </div>
           </div>
+        </Tabs.Panel>
+
+        {/* AI Command Panel */}
+        <Tabs.Panel value="ai" className="p-3">
+          <NaturalLanguageCommand 
+            onCommandExecuted={() => {
+              loadCurrentTabs();
+              loadStatsData();
+            }}
+          />
         </Tabs.Panel>
       </Tabs.Root>
 
