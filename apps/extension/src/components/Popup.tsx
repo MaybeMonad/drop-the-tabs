@@ -514,7 +514,7 @@ function DomainGroup({
   onDuplicate,
   onSaveGroup,
   onCloseGroup,
-  defaultCollapsed = false,
+  forceCollapse,
 }: {
   domain: string;
   tabs: TabInfo[];
@@ -527,11 +527,18 @@ function DomainGroup({
   onDuplicate: (id: number) => void;
   onSaveGroup: (tabs: TabInfo[]) => void;
   onCloseGroup: (tabIds: number[]) => void;
-  defaultCollapsed?: boolean;
+  forceCollapse?: boolean;
 }) {
-  const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [showActions, setShowActions] = useState(false);
   const hasManyTabs = tabs.length > 10;
+
+  // Sync with forceCollapse prop
+  useEffect(() => {
+    if (forceCollapse !== undefined) {
+      setIsCollapsed(forceCollapse);
+    }
+  }, [forceCollapse]);
 
   const handleSaveGroup = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1455,7 +1462,7 @@ export default function Popup() {
           className="flex-1 flex flex-col min-h-0 p-0 mt-2"
           style={{ display: activeTab === "current" ? "flex" : "none" }}
         >
-          {/* Collapse All Toggle */}
+          {/* Collapse All Toggle + Search Actions */}
           <div className="px-4 mb-1.5 flex-shrink-0 flex items-center justify-between">
             <button
               onClick={toggleCollapseAll}
@@ -1473,6 +1480,28 @@ export default function Popup() {
                 </>
               )}
             </button>
+
+            {/* Search Result Actions */}
+            {searchQuery.trim() && filteredTabs.length > 0 && (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => handleSaveGroup(filteredTabs)}
+                  className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 rounded-md transition-colors"
+                  title="Save all search results as session"
+                >
+                  <FloppyDisk className="w-3 h-3" weight="regular" />
+                  Save
+                </button>
+                <button
+                  onClick={() => handleCloseGroup(filteredTabs.map(t => t.id))}
+                  className="flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                  title="Close all search results"
+                >
+                  <Trash className="w-3 h-3" weight="regular" />
+                  Close
+                </button>
+              </div>
+            )}
           </div>
 
           <ScrollArea.Root className="flex-1" style={{ minHeight: 0 }}>
@@ -1514,7 +1543,7 @@ export default function Popup() {
                           onDuplicate={handleDuplicateTab}
                           onSaveGroup={handleSaveGroup}
                           onCloseGroup={handleCloseGroup}
-                          defaultCollapsed={collapseAll}
+                          forceCollapse={collapseAll}
                         />
                       ))}
                     </motion.div>
