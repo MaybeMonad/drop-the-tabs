@@ -16,11 +16,11 @@ interface NaturalLanguageCommandProps {
 }
 
 const SUGGESTED_COMMANDS = [
-  '把所有设计相关的 tabs group 到一起',
-  '帮我把 openclaw 项目的 tabs 整理一下',
-  '把所有视频标记为待看',
-  '关闭所有购物网站的 tabs',
-  '把高优先级的 tabs 导出到 Obsidian',
+  'group all design related tabs together',
+  'organize my openclaw project tabs',
+  'mark all videos as unread',
+  'close all shopping website tabs',
+  'export high priority tabs to Obsidian',
 ];
 
 export function NaturalLanguageCommand({ onCommandExecuted }: NaturalLanguageCommandProps) {
@@ -47,8 +47,8 @@ export function NaturalLanguageCommand({ onCommandExecuted }: NaturalLanguageCom
         success: !result.error,
         action: result.action,
         message: result.error 
-          ? `未能理解命令: ${command}` 
-          : `成功执行: ${getActionDescription(result)}`,
+          ? `Failed to understand: ${command}` 
+          : `Successfully executed: ${getActionDescription(result)}`,
         details: result
       };
 
@@ -62,7 +62,7 @@ export function NaturalLanguageCommand({ onCommandExecuted }: NaturalLanguageCom
     } catch (error) {
       setResult({
         success: false,
-        message: `执行失败: ${error}`
+        message: `Execution failed: ${error}`
       });
     } finally {
       setIsExecuting(false);
@@ -82,13 +82,13 @@ export function NaturalLanguageCommand({ onCommandExecuted }: NaturalLanguageCom
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-purple-500" />
-          <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">AI 助手</span>
+          <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">AI Assistant</span>
         </div>
         <button
           onClick={() => setShowSuggestions(!showSuggestions)}
           className="text-xs text-purple-600 hover:text-purple-700"
         >
-          {showSuggestions ? '隐藏建议' : '查看建议'}
+          {showSuggestions ? 'Hide suggestions' : 'Show suggestions'}
         </button>
       </div>
 
@@ -102,7 +102,7 @@ export function NaturalLanguageCommand({ onCommandExecuted }: NaturalLanguageCom
             value={command}
             onChange={(e) => setCommand(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="输入自然语言命令，例如：把所有设计相关的 tabs group 到一起"
+            placeholder="Enter natural language command, e.g.: group all design related tabs"
             className="flex-1 bg-transparent text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none"
             disabled={isExecuting}
           />
@@ -128,7 +128,7 @@ export function NaturalLanguageCommand({ onCommandExecuted }: NaturalLanguageCom
         {/* Suggestions Dropdown */}
         {showSuggestions && (
           <div className="mt-2 p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-100 dark:border-purple-800">
-            <p className="text-[10px] text-purple-600 dark:text-purple-400 uppercase font-medium mb-2">试试这些命令</p>
+            <p className="text-[10px] text-purple-600 dark:text-purple-400 uppercase font-medium mb-2">Try these commands</p>
             <div className="flex flex-wrap gap-1.5">
               {SUGGESTED_COMMANDS.map((cmd, i) => (
                 <button
@@ -168,7 +168,7 @@ export function NaturalLanguageCommand({ onCommandExecuted }: NaturalLanguageCom
               </p>
               {result.details?.count && (
                 <p className="text-xs text-zinc-500 mt-1">
-                  影响了 {result.details.count} 个 tabs
+                  Affected {result.details.count} tabs
                 </p>
               )}
             </div>
@@ -185,7 +185,7 @@ export function NaturalLanguageCommand({ onCommandExecuted }: NaturalLanguageCom
       {/* History */}
       {history.length > 0 && (
         <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800">
-          <p className="text-[10px] text-zinc-500 uppercase font-medium mb-2">最近执行</p>
+          <p className="text-[10px] text-zinc-500 uppercase font-medium mb-2">Recent executions</p>
           <div className="space-y-1">
             {history.slice(-3).map((item, i) => (
               <div 
@@ -208,12 +208,12 @@ export function NaturalLanguageCommand({ onCommandExecuted }: NaturalLanguageCom
 function getActionDescription(result: any): string {
   switch (result.action) {
     case 'close':
-      return `关闭了 ${result.count} 个 ${result.category} tabs`;
+      return `closed ${result.count} ${result.category} tabs`;
     case 'update_status':
-      return `将 ${result.count} 个 ${result.category} tabs 标记为 ${result.status}`;
+      return `marked ${result.count} ${result.category} tabs as ${result.status}`;
     case 'group':
-      return `创建了 ${result.groups?.length || 0} 个分组`;
+      return `created ${result.groups?.length || 0} groups`;
     default:
-      return '执行完成';
+      return 'execution completed';
   }
 }
