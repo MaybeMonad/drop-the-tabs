@@ -1,17 +1,13 @@
 // Main Inbox Zero controller - manages all Inbox Zero features
-import { DecisionPopup } from '../components/InboxZero/DecisionPopup';
-import { DailyEnforcement } from '../components/InboxZero/DailyEnforcement';
-import { TabLimitModal } from '../components/InboxZero/TabLimitModal';
+import type { TabInfo } from '../utils/types';
 import { getAllTabMetadata, saveTabMetadata } from './tabMetadata';
 import { categorizeTab } from '../utils/contentCategory';
-import type { TabInfo } from '../utils/types';
 
 const MAX_TABS = 5;
 const DAILY_CHECK_HOUR = 23; // 11 PM
 const DAILY_CHECK_MINUTE = 0;
 
 export class InboxZeroController {
-  private decisionPopupRoot: HTMLDivElement | null = null;
   private isShowingDecision = false;
 
   constructor() {
@@ -30,6 +26,40 @@ export class InboxZeroController {
     
     // Listen for alarms
     chrome.alarms.onAlarm.addListener(this.handleAlarm.bind(this));
+    
+    // Listen for messages from content script
+    chrome.runtime.onMessage.addListener(this.handleMessages.bind(this));
+  }
+
+  // Handle messages from content script
+  private handleMessages(request: any, sender: any, sendResponse: any) {
+    switch (request.action) {
+      case 'decisionMade':
+        this.handleDecision(request.tabId, request.decision);
+        sendResponse({ success: true });
+        break;
+      case 'dailyEnforcementComplete':
+        console.log('[DTT] Daily enforcement completed');
+        sendResponse({ success: true });
+        break;
+      case 'dailyEnforcementSkipped':
+        console.log('[DTT] Daily enforcement skipped');
+        sendResponse({ success: true });
+        break;
+      case 'closeTab':
+        chrome.tabs.remove(request.tabId);
+        sendResponse({ success: true });
+        break;
+      case 'saveAndCloseTab':
+        this.saveAndCloseTab(request.tabId);
+        sendResponse({ success: true });
+        break;
+      case 'cancelNewTab':
+        console.log('[DTT] User cancelled opening new tab');
+        sendResponse({ success: true });
+        break;
+    }
+    return true;
   }
 
   // Handle new tab creation
@@ -62,49 +92,117 @@ export class InboxZeroController {
     }
   }
 
-  // Show decision popup for a tab
-  private showDecisionPopup(tab: chrome.tabs.Tab) {
-    if (this.isShowingDecision) return;
+  // Show decision popup via content script
+  private async showDecisionPopup(tab: chrome.tabs.Tab) {
+    if (this.isShowingDecision || !tab.id) return;
     this.isShowingDecision = true;
 
-    // Create popup container
-    const container = document.createElement('div');
-    container.id = 'inbox-zero-decision-popup';
-    document.body.appendChild(container);
-    this.decisionPopupRoot = container;
+    try {
+      // Inject content script if not already injected
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['content-scripts/index.js']
+      });
 
-    // TODO: Render React component
-    // For now, use simple confirm
-    const decision = confirm(
-      `Decide on: ${tab.title}\n\n` +
-      '[OK] = Read Now\n' +
-      '[Cancel] = Close'
-    );
-
-    if (decision) {
-      saveTabMetadata(tab.id || 0, { status: 'reading' });
-    } else {
-      chrome.tabs.remove(tab.id || 0);
+      // Send message to content script to show popup
+      await chrome.tabs.sendMessage(tab.id, {
+        action: 'showDecisionPopup',
+        tab: {
+          id: tab.id,
+          title: tab.title || 'Untitled',
+          url: tab.url || '',
+          favicon: tab.favIconUrl,
+          pinned: tab.pinned,
+          active: tab.active,
+          domain: new URL(tab.url || '').hostname
+        }
+      });
+    } catch (error) {
+      console.error('[DTT] Failed to show decision popup:', error);
+      // Fallback to simple behavior
+      this.fallbackDecision(tab);
     }
-
-    this.cleanupDecisionPopup();
   }
 
-  private cleanupDecisionPopup() {
-    if (this.decisionPopupRoot) {
-      this.decisionPopupRoot.remove();
-      this.decisionPopupRoot = null;
+  // Fallback when content script fails
+  private async fallbackDecision(tab: chrome.tabs.Tab) {
+    // Just auto-categorize and mark as unread
+    if (tab.id) {
+      const categorized = categorizeTab({
+        id: tab.id,
+        url: tab.url || '',
+        title: tab.title || '',
+        domain: new URL(tab.url || '').hostname,
+        favicon: tab.favIconUrl,
+        active: tab.active || false,
+        pinned: tab.pinned || false,
+        groupId: tab.groupId
+      });
+      
+      await saveTabMetadata(tab.id, {
+        status: 'unread',
+        category: categorized.category
+      });
     }
     this.isShowingDecision = false;
   }
 
-  // Show tab limit modal
-  private showTabLimitModal(tabs: chrome.tabs.Tab[]) {
-    // TODO: Render React modal
-    alert(
-      `Tab limit reached (${tabs.length}/${MAX_TABS})\n\n` +
-      'Close one tab before opening a new one.'
-    );
+  // Handle decision from content script
+  private async handleDecision(tabId: number, decision: 'read' | 'timer' | 'save' | 'close') {
+    this.isShowingDecision = false;
+
+    switch (decision) {
+      case 'read':
+        await saveTabMetadata(tabId, { status: 'reading' });
+        break;
+      case 'timer':
+        await saveTabMetadata(tabId, { status: 'unread' });
+        // Start 5-minute countdown
+        chrome.alarms.create(`tab-timer-${tabId}`, { delayInMinutes: 5 });
+        break;
+      case 'save':
+        await this.saveAndCloseTab(tabId);
+        break;
+      case 'close':
+        await chrome.tabs.remove(tabId);
+        break;
+    }
+  }
+
+  // Show tab limit modal via content script
+  private async showTabLimitModal(tabs: chrome.tabs.Tab[]) {
+    // Find the active tab to show modal
+    const activeTab = tabs.find(t => t.active) || tabs[0];
+    if (!activeTab.id) return;
+
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: activeTab.id },
+        files: ['content-scripts/index.js']
+      });
+
+      await chrome.tabs.sendMessage(activeTab.id, {
+        action: 'showTabLimitModal',
+        currentTabs: tabs.map(t => ({
+          id: t.id,
+          title: t.title,
+          url: t.url,
+          favicon: t.favIconUrl,
+          pinned: t.pinned,
+          domain: new URL(t.url || '').hostname
+        }))
+      });
+    } catch (error) {
+      console.error('[DTT] Failed to show tab limit modal:', error);
+      // Fallback: just notify
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icon/128.png',
+        title: 'Tab Limit Reached',
+        message: `Maximum ${MAX_TABS} tabs allowed. Close one to open a new one.`,
+        priority: 2
+      });
+    }
   }
 
   // Setup daily enforcement alarm
@@ -152,25 +250,89 @@ export class InboxZeroController {
 
     if (unreadTabs.length === 0) return;
 
-    // TODO: Show DailyEnforcement modal
-    // For now, just notify
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: 'icon/128.png',
-      title: 'Daily Inbox Zero Required',
-      message: `You have ${unreadTabs.length} unread tabs to process.`,
-      priority: 2
-    });
+    // Show enforcement modal on active tab
+    const activeTab = tabs.find(t => t.active) || tabs[0];
+    if (!activeTab.id) return;
+
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: activeTab.id },
+        files: ['content-scripts/index.js']
+      });
+
+      await chrome.tabs.sendMessage(activeTab.id, {
+        action: 'showDailyEnforcement',
+        unreadTabs: unreadTabs.map(t => ({
+          id: t.id,
+          title: t.title,
+          url: t.url,
+          favicon: t.favIconUrl,
+          domain: new URL(t.url || '').hostname,
+          category: metadata[t.id || 0]?.category || 'other',
+          status: 'unread'
+        }))
+      });
+    } catch (error) {
+      console.error('[DTT] Failed to show daily enforcement:', error);
+      // Fallback to notification
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icon/128.png',
+        title: 'Daily Inbox Zero Required',
+        message: `You have ${unreadTabs.length} unread tabs to process.`,
+        priority: 2
+      });
+    }
   }
 
   // Handle tab timer (5-minute rule)
   private async handleTabTimer(tabId: number) {
-    const tab = await chrome.tabs.get(tabId);
-    const metadata = await getAllTabMetadata();
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      const metadata = await getAllTabMetadata();
 
-    // Only close if still unread
-    if (metadata[tabId]?.status === 'unread') {
-      // Save to Obsidian first
+      // Only close if still unread
+      if (metadata[tabId]?.status === 'unread') {
+        // Save to Obsidian first
+        const categorized = categorizeTab({
+          id: tab.id || 0,
+          url: tab.url || '',
+          title: tab.title || '',
+          domain: new URL(tab.url || '').hostname,
+          favicon: tab.favIconUrl,
+          active: tab.active || false,
+          pinned: tab.pinned || false,
+          groupId: tab.groupId
+        });
+
+        const { exportToObsidian } = await import('./obsidianExport');
+        await exportToObsidian([categorized as any], {
+          folderStructure: 'by-category',
+          template: 'minimal'
+        });
+
+        // Close tab
+        await chrome.tabs.remove(tabId);
+
+        // Notify
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: 'icon/128.png',
+          title: 'Tab Auto-Closed',
+          message: `"${tab.title}" was saved and closed after 5 minutes.`,
+          priority: 1
+        });
+      }
+    } catch (error) {
+      // Tab might already be closed
+      console.log('[DTT] Tab timer: tab already closed or not found');
+    }
+  }
+
+  // Save and close tab
+  private async saveAndCloseTab(tabId: number) {
+    try {
+      const tab = await chrome.tabs.get(tabId);
       const categorized = categorizeTab({
         id: tab.id || 0,
         url: tab.url || '',
@@ -182,23 +344,20 @@ export class InboxZeroController {
         groupId: tab.groupId
       });
 
+      await saveTabMetadata(tabId, {
+        status: 'archived',
+        category: categorized.category
+      });
+
       const { exportToObsidian } = await import('./obsidianExport');
       await exportToObsidian([categorized as any], {
         folderStructure: 'by-category',
-        template: 'minimal'
+        template: 'standard'
       });
 
-      // Close tab
       await chrome.tabs.remove(tabId);
-
-      // Notify
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'icon/128.png',
-        title: 'Tab Auto-Closed',
-        message: `"${tab.title}" was saved and closed after 5 minutes.`,
-        priority: 1
-      });
+    } catch (error) {
+      console.error('[DTT] Failed to save and close tab:', error);
     }
   }
 
