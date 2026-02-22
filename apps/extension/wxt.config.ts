@@ -1,5 +1,5 @@
 import { defineConfig } from 'wxt';
-import { cpSync, readFileSync, writeFileSync } from 'fs';
+import { cpSync, readFileSync, writeFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 
 export default defineConfig({
@@ -66,20 +66,25 @@ export default defineConfig({
           }
           
           // Fix HTML paths (WXT uses absolute paths which don't work in extensions)
-          try {
-            const files = ['popup.html', 'options.html'];
-            for (const file of files) {
-              const filePath = resolve(outDir, file);
-              let content = readFileSync(filePath, 'utf-8');
-              // Replace absolute paths with relative paths
-              content = content.replace(/src="\/chunks\//g, 'src="./chunks/');
-              content = content.replace(/href="\/chunks\//g, 'href="./chunks/');
-              content = content.replace(/href="\/assets\//g, 'href="./assets/');
-              writeFileSync(filePath, content);
+          // Only process if popup.html exists (it won't exist during background build phase)
+          const files = ['popup.html', 'options.html'];
+          const filesExist = files.every(f => existsSync(resolve(outDir, f)));
+          
+          if (filesExist) {
+            try {
+              for (const file of files) {
+                const filePath = resolve(outDir, file);
+                let content = readFileSync(filePath, 'utf-8');
+                // Replace absolute paths with relative paths
+                content = content.replace(/src="\/chunks\//g, 'src="./chunks/');
+                content = content.replace(/href="\/chunks\//g, 'href="./chunks/');
+                content = content.replace(/href="\/assets\//g, 'href="./assets/');
+                writeFileSync(filePath, content);
+              }
+              console.log('[wxt] Fixed HTML paths');
+            } catch (e) {
+              console.error('[wxt] Failed to fix HTML paths:', e);
             }
-            console.log('[wxt] Fixed HTML paths');
-          } catch (e) {
-            console.error('[wxt] Failed to fix HTML paths:', e);
           }
         }
       }
