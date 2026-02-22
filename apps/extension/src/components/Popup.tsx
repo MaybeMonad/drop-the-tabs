@@ -402,16 +402,12 @@ function DailyTabsChart({ data }: { data: DailyTabCount[] }) {
 }
 
 // Tab Distribution Chart - macOS Storage style
-interface DomainData {
-  domain: string;
-  count: number;
-  color: string;
-}
+const MAX_TABS = 3600;
 
 const DOMAIN_COLORS = [
   '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
   '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9',
-  '#F8C471', '#82E0AA', '#F1948A', '#85C1E9', '#D7BDE2',
+  '#F8C471', '#82E0AA', '#F1948A', '#D7BDE2', '#AED6F1',
 ];
 
 function TabDistributionChart({ tabs }: { tabs: TabInfo[] }) {
@@ -428,7 +424,7 @@ function TabDistributionChart({ tabs }: { tabs: TabInfo[] }) {
     
     const sorted = Array.from(counts.entries())
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 10);
+      .slice(0, 15);
     
     return sorted.map(([domain, count], i) => ({
       domain,
@@ -437,9 +433,11 @@ function TabDistributionChart({ tabs }: { tabs: TabInfo[] }) {
     }));
   }, [tabs]);
 
-  const total = tabs.length;
+  const used = tabs.length;
+  const remaining = Math.max(0, MAX_TABS - used);
+  const usagePercent = (used / MAX_TABS) * 100;
   
-  if (total === 0) {
+  if (used === 0) {
     return (
       <GlassCard className="p-6 text-center">
         <ChartBar className="w-8 h-8 text-zinc-200 mx-auto mb-2" weight="regular" />
@@ -449,43 +447,79 @@ function TabDistributionChart({ tabs }: { tabs: TabInfo[] }) {
   }
 
   return (
-    <GlassCard className="p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className="text-xs font-semibold text-zinc-900">Tab Distribution</h3>
-          <p className="text-[9px] text-zinc-500">By domain</p>
-        </div>
-        <span className="text-lg font-bold text-zinc-900">{total} tabs</span>
+    <GlassCard className="p-4 overflow-hidden">
+      {/* Header - macOS Storage style */}
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs font-semibold text-zinc-900">Tab Capacity</h3>
+        <span className="text-[11px] font-medium text-zinc-600">
+          <span className={used > MAX_TABS * 0.9 ? "text-rose-500 font-bold" : "text-zinc-900 font-bold"}>
+            {used}
+          </span>
+          <span className="text-zinc-400"> / {MAX_TABS} used</span>
+        </span>
       </div>
 
-      {/* Horizontal Bar Chart */}
+      {/* Main Bar - macOS Storage style */}
       <div className="mb-4">
-        <div className="h-4 bg-zinc-100 rounded-full overflow-hidden flex">
+        <div className="h-5 bg-zinc-200 rounded-lg overflow-hidden flex">
+          {/* Used segments by domain */}
           {domainData.map((item) => (
             <motion.div
               key={item.domain}
               initial={{ width: 0 }}
-              animate={{ width: `${(item.count / total) * 100}%` }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
-              className="h-full relative group cursor-pointer"
+              animate={{ width: `${(item.count / MAX_TABS) * 100}%` }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+              className="h-full relative group"
               style={{ backgroundColor: item.color }}
             >
-              {/* Tooltip on hover */}
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 text-white text-[9px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
-                {item.domain}: {item.count} ({Math.round((item.count / total) * 100)}%)
+              {/* Hover tooltip */}
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 text-white text-[9px] rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20">
+                {item.domain}: {item.count} tabs
               </div>
             </motion.div>
           ))}
+          {/* Remaining space */}
+          {remaining > 0 && (
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${(remaining / MAX_TABS) * 100}%` }}
+              transition={{ duration: 0.6, ease: "easeOut", delay: 0.2 }}
+              className="h-full bg-zinc-300"
+            />
+          )}
         </div>
       </div>
 
-      {/* Legend & List */}
-      <div className="space-y-2 max-h-[200px] overflow-y-auto scrollbar-thin">
-        {domainData.map((item) => (
-          <div key={item.domain} className="flex items-center gap-2">
+      {/* Legend */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {domainData.slice(0, 6).map((item) => (
+          <div key={item.domain} className="flex items-center gap-1">
             <div 
-              className="w-2.5 h-2.5 rounded-full flex-shrink-0" 
+              className="w-2 h-2 rounded-full" 
+              style={{ backgroundColor: item.color }}
+            />
+            <span className="text-[9px] text-zinc-500 truncate max-w-[60px]">
+              {item.domain}
+            </span>
+          </div>
+        ))}
+        {domainData.length > 6 && (
+          <div className="flex items-center gap-1">
+            <div className="w-2 h-2 rounded-full bg-zinc-300" />
+            <span className="text-[9px] text-zinc-500">+{domainData.length - 6} more</span>
+          </div>
+        )}
+      </div>
+
+      {/* Domain List */}
+      <div className="space-y-1 max-h-[180px] overflow-y-auto scrollbar-thin">
+        {domainData.map((item) => (
+          <div 
+            key={item.domain} 
+            className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-zinc-50 transition-colors group"
+          >
+            <div 
+              className="w-3 h-3 rounded flex-shrink-0" 
               style={{ backgroundColor: item.color }}
             />
             <div className="flex-1 min-w-0">
@@ -493,29 +527,28 @@ function TabDistributionChart({ tabs }: { tabs: TabInfo[] }) {
                 <span className="text-[11px] font-medium text-zinc-700 truncate">
                   {item.domain}
                 </span>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-semibold text-zinc-900">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold text-zinc-900">
                     {item.count}
                   </span>
-                  <span className="text-[9px] text-zinc-400">
-                    {Math.round((item.count / total) * 100)}%
+                  <span className="text-[9px] text-zinc-400 w-8 text-right">
+                    {Math.round((item.count / MAX_TABS) * 100)}%
                   </span>
                 </div>
-              </div>
-              {/* Mini bar */}
-              <div className="h-1 bg-zinc-100 rounded-full overflow-hidden mt-0.5">
-                <motion.div
-                  className="h-full rounded-full"
-                  style={{ backgroundColor: item.color }}
-                  initial={{ width: 0 }}
-                  animate={{ width: `${(item.count / total) * 100}%` }}
-                  transition={{ duration: 0.4 }}
-                />
               </div>
             </div>
           </div>
         ))}
       </div>
+
+      {/* Capacity Warning */}
+      {used > MAX_TABS * 0.9 && (
+        <div className="mt-3 p-2 bg-rose-50 border border-rose-100 rounded-lg">
+          <p className="text-[10px] text-rose-600 font-medium">
+            ⚠️ Approaching tab limit ({Math.round(usagePercent)}%)
+          </p>
+        </div>
+      )}
     </GlassCard>
   );
 }
