@@ -1,21 +1,118 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { DecisionPopup } from '../components/InboxZero/DecisionPopup';
-import type { TabInfo } from '../utils/types';
+import { DecisionPopup } from '../../components/InboxZero/DecisionPopup.tsx';
+import type { TabInfo } from '../../utils/types';
+import { defineContentScript } from 'wxt/sandbox';
 
 // Content script entry point for Inbox Zero Decision Popup
 // This script is injected into every webpage and can render React components
 
-console.log('[DTT Content] Inbox Zero content script loaded');
-
-// Listen for messages from background script
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'showDecisionPopup') {
-    showDecisionPopup(request.tab);
-    sendResponse({ success: true });
-  }
-  return true;
+export default defineContentScript({
+  matches: ['<all_urls>'],
+  main() {
+    console.log('[DTT Content] Inbox Zero content script loaded');
+    initContentScript();
+  },
 });
+
+function initContentScript() {
+  // Listen for messages from background script
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'showDecisionPopup') {
+      showDecisionPopup(request.tab);
+      sendResponse({ success: true });
+    }
+    return true;
+  });
+
+  // Also listen for daily enforcement modal
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'showDailyEnforcement') {
+      // Import and show daily enforcement
+      import('../../components/InboxZero/DailyEnforcement.tsx').then(({ DailyEnforcement }) => {
+        const container = document.createElement('div');
+        container.id = 'dtt-daily-enforcement-root';
+        container.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 2147483647;
+        `;
+        document.body.appendChild(container);
+
+        const shadowRoot = container.attachShadow({ mode: 'open' });
+        const reactContainer = document.createElement('div');
+        shadowRoot.appendChild(reactContainer);
+
+        const root = createRoot(reactContainer);
+        root.render(
+          React.createElement(DailyEnforcement, {
+            unreadTabs: request.unreadTabs,
+            onComplete: () => {
+              chrome.runtime.sendMessage({ action: 'dailyEnforcementComplete' });
+              root.unmount();
+              container.remove();
+            },
+            onSkip: () => {
+              chrome.runtime.sendMessage({ action: 'dailyEnforcementSkipped' });
+              root.unmount();
+              container.remove();
+            }
+          })
+        );
+      });
+      
+      sendResponse({ success: true });
+    }
+    return true;
+  });
+
+  // Listen for tab limit modal
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'showTabLimitModal') {
+      import('../../components/InboxZero/TabLimitModal.tsx').then(({ TabLimitModal }) => {
+        const container = document.createElement('div');
+        container.id = 'dtt-tab-limit-root';
+        container.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 2147483647;
+        `;
+        document.body.appendChild(container);
+
+        const shadowRoot = container.attachShadow({ mode: 'open' });
+        const reactContainer = document.createElement('div');
+        shadowRoot.appendChild(reactContainer);
+
+        const root = createRoot(reactContainer);
+        root.render(
+          React.createElement(TabLimitModal, {
+            currentTabs: request.currentTabs,
+            onCloseOne: (tabId) => {
+              chrome.runtime.sendMessage({ action: 'closeTab', tabId });
+            },
+            onSaveAndClose: (tabId) => {
+              chrome.runtime.sendMessage({ action: 'saveAndCloseTab', tabId });
+            },
+            onCancel: () => {
+              chrome.runtime.sendMessage({ action: 'cancelNewTab' });
+              root.unmount();
+              container.remove();
+            }
+          })
+        );
+      });
+      
+      sendResponse({ success: true });
+    }
+    return true;
+  });
+}
 
 function showDecisionPopup(tab: TabInfo) {
   // Check if popup already exists
@@ -97,91 +194,3 @@ function showDecisionPopup(tab: TabInfo) {
     })
   );
 }
-
-// Also listen for daily enforcement modal
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'showDailyEnforcement') {
-    // Import and show daily enforcement
-    import('../components/InboxZero/DailyEnforcement').then(({ DailyEnforcement }) => {
-      const container = document.createElement('div');
-      container.id = 'dtt-daily-enforcement-root';
-      container.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 2147483647;
-      `;
-      document.body.appendChild(container);
-
-      const shadowRoot = container.attachShadow({ mode: 'open' });
-      const reactContainer = document.createElement('div');
-      shadowRoot.appendChild(reactContainer);
-
-      const root = createRoot(reactContainer);
-      root.render(
-        React.createElement(DailyEnforcement, {
-          unreadTabs: request.unreadTabs,
-          onComplete: () => {
-            chrome.runtime.sendMessage({ action: 'dailyEnforcementComplete' });
-            root.unmount();
-            container.remove();
-          },
-          onSkip: () => {
-            chrome.runtime.sendMessage({ action: 'dailyEnforcementSkipped' });
-            root.unmount();
-            container.remove();
-          }
-        })
-      );
-    });
-    
-    sendResponse({ success: true });
-  }
-  return true;
-});
-
-// Listen for tab limit modal
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'showTabLimitModal') {
-    import('../components/InboxZero/TabLimitModal').then(({ TabLimitModal }) => {
-      const container = document.createElement('div');
-      container.id = 'dtt-tab-limit-root';
-      container.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 2147483647;
-      `;
-      document.body.appendChild(container);
-
-      const shadowRoot = container.attachShadow({ mode: 'open' });
-      const reactContainer = document.createElement('div');
-      shadowRoot.appendChild(reactContainer);
-
-      const root = createRoot(reactContainer);
-      root.render(
-        React.createElement(TabLimitModal, {
-          currentTabs: request.currentTabs,
-          onCloseOne: (tabId) => {
-            chrome.runtime.sendMessage({ action: 'closeTab', tabId });
-          },
-          onSaveAndClose: (tabId) => {
-            chrome.runtime.sendMessage({ action: 'saveAndCloseTab', tabId });
-          },
-          onCancel: () => {
-            chrome.runtime.sendMessage({ action: 'cancelNewTab' });
-            root.unmount();
-            container.remove();
-          }
-        })
-      );
-    });
-    
-    sendResponse({ success: true });
-  }
-  return true;
-});

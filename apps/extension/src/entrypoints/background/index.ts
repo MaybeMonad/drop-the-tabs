@@ -63,7 +63,7 @@ export default defineBackground(() => {
     if (!syncService.isConnected()) return;
 
     try {
-      const tabs = await chrome.tabs.query({ currentWindow: true });
+      const tabs = await chrome.tabs.query({});
       const tabData = tabs.map(tab => ({
         id: tab.id || 0,
         url: tab.url || '',
@@ -125,8 +125,13 @@ export default defineBackground(() => {
             break;
 
           case 'deduplicate':
-            const removed = await tabManager.deduplicateTabs();
-            sendResponse({ success: true, removed });
+            const result = await tabManager.deduplicateTabs();
+            sendResponse({ success: true, ...result });
+            break;
+
+          case 'getDuplicateInfo':
+            const dupInfo = await tabManager.getDuplicateInfo();
+            sendResponse({ success: true, duplicates: dupInfo });
             break;
 
           case 'saveSession':

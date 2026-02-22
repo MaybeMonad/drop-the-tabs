@@ -34,7 +34,7 @@ export class TabManager {
   }
 
   async autoGroupTabs() {
-    const tabs = await chrome.tabs.query({ pinned: false, currentWindow: true });
+    const tabs = await chrome.tabs.query({ pinned: false });
     
     for (const tab of tabs) {
       if (tab.groupId !== -1) continue; // Already grouped
@@ -108,26 +108,70 @@ export class TabManager {
     throw new Error('Could not create group');
   }
 
-  async deduplicateTabs(): Promise<number> {
-    const tabs = await chrome.tabs.query({ currentWindow: true });
-    const seen = new Map<string, number>(); // fingerprint -> tabId
-    let removed = 0;
+  async getDuplicateInfo(): Promise<{ url: string; title: string; count: number; tabs: { id: number; windowId: number; title: string }[] }[]> {
+    const tabs = await chrome.tabs.query({});
+    const fingerprintMap = new Map<string, { url: string; title: string; tabs: { id: number; windowId: number; title: string }[] }>();
 
     for (const tab of tabs) {
-      if (!tab.url) continue;
-      
+      if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) continue;
+
       const fingerprint = this.getTabFingerprint(tab.url);
-      
-      if (seen.has(fingerprint)) {
-        // Close duplicate
-        await chrome.tabs.remove(tab.id!);
-        removed++;
+
+      if (!fingerprintMap.has(fingerprint)) {
+        fingerprintMap.set(fingerprint, { url: tab.url, title: tab.title || '', tabs: [] });
+      }
+      fingerprintMap.get(fingerprint)!.tabs.push({ id: tab.id!, windowId: tab.windowId!, title: tab.title || '' });
+    }
+
+    // Filter to only duplicates (count > 1)
+    return Array.from(fingerprintMap.values())
+      .filter(item => item.tabs.length > 1)
+      .map(item => ({
+        url: item.url,
+        title: item.title,
+        count: item.tabs.length,
+        tabs: item.tabs
+      }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  async deduplicateTabs(): Promise<{ removed: number; kept: number; duplicates: { url: string; title: string; count: number }[] }> {
+    const tabs = await chrome.tabs.query({});
+    const seen = new Map<string, number>(); // fingerprint -> tabId to keep
+    const duplicates: { url: string; title: string; count: number }[] = [];
+    let removed = 0;
+    let kept = 0;
+
+    // First pass: identify duplicates
+    const fingerprintMap = new Map<string, { url: string; title: string; tabIds: number[] }>();
+
+    for (const tab of tabs) {
+      if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) continue;
+
+      const fingerprint = this.getTabFingerprint(tab.url);
+
+      if (!fingerprintMap.has(fingerprint)) {
+        fingerprintMap.set(fingerprint, { url: tab.url, title: tab.title || '', tabIds: [] });
+      }
+      fingerprintMap.get(fingerprint)!.tabIds.push(tab.id!);
+    }
+
+    // Close duplicates, keep the first one
+    for (const [fingerprint, data] of fingerprintMap) {
+      if (data.tabIds.length > 1) {
+        duplicates.push({ url: data.url, title: data.title, count: data.tabIds.length });
+        // Keep the first tab, close the rest
+        const [keepId, ...closeIds] = data.tabIds;
+        seen.set(fingerprint, keepId);
+        await chrome.tabs.remove(closeIds);
+        removed += closeIds.length;
+        kept++;
       } else {
-        seen.set(fingerprint, tab.id!);
+        kept++;
       }
     }
 
-    return removed;
+    return { removed, kept, duplicates };
   }
 
   private getTabFingerprint(url: string): string {
@@ -144,7 +188,7 @@ export class TabManager {
   }
 
   async saveSession(name: string): Promise<string> {
-    const tabs = await chrome.tabs.query({ currentWindow: true });
+    const tabs = await chrome.tabs.query({});
     const session: Session = {
       id: Date.now().toString(),
       name,
@@ -193,7 +237,7 @@ export class TabManager {
   }
 
   async getAllTabs(): Promise<TabInfo[]> {
-    const tabs = await chrome.tabs.query({ currentWindow: true });
+    const tabs = await chrome.tabs.query({});
     return tabs.map(tab => ({
       id: tab.id!,
       url: tab.url || '',
@@ -202,12 +246,13 @@ export class TabManager {
       pinned: tab.pinned,
       groupId: tab.groupId,
       active: tab.active,
+      windowId: tab.windowId,
       lastAccessed: Date.now() // Would track this properly in real implementation
     }));
   }
 
   async closeAllTabs() {
-    const tabs = await chrome.tabs.query({ currentWindow: true, pinned: false });
+    const tabs = await chrome.tabs.query({ pinned: false });
     await chrome.tabs.remove(tabs.map(t => t.id!).filter(Boolean));
   }
 
@@ -217,8 +262,8 @@ export class TabManager {
 
     // Close tabs that haven't been accessed in X minutes
     // This is a simplified version - real implementation would track last access time
-    const tabs = await chrome.tabs.query({ currentWindow: true, pinned: false });
-    
+    const tabs = await chrome.tabs.query({ pinned: false });
+
     if (tabs.length > settings.maxTabs) {
       // Sort by some criteria and close excess
       const toClose = tabs.slice(0, tabs.length - settings.maxTabs);

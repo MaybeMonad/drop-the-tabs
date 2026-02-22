@@ -7,7 +7,7 @@ import { exportToObsidian, exportAsSession, copyAsMarkdownList, type ObsidianExp
 
 interface ExportPanelProps {
   tabs: CategorizedTab[];
-  selectedTabIds: number[];
+  selectedTabIds: Set<number>;
   onExportComplete: () => void;
 }
 

@@ -7,6 +7,7 @@ export interface TabInfo {
   groupId: number;
   active: boolean;
   lastAccessed?: number;
+  windowId?: number;  // Added for multi-window support
   // Categorization fields
   domain?: string;
   category?: 'video' | 'social' | 'code' | 'article' | 'shopping' | 'design' | 'news' | 'other';

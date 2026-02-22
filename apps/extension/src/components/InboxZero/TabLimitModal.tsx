@@ -1,7 +1,7 @@
 // Hard tab limit enforcer - Maximum 5 tabs at any time
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Warning, X, Save } from '@phosphor-icons/react';
+import { Warning, X, FloppyDisk } from '@phosphor-icons/react';
 import type { TabInfo } from '../../utils/types';
 
 interface TabLimitModalProps {
@@ -83,7 +83,7 @@ export function TabLimitModal({ currentTabs, onCloseOne, onSaveAndClose, onCance
                       onClick={() => onSaveAndClose(tab.id)}
                       className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 rounded-lg transition-colors"
                     >
-                      <Save className="w-3.5 h-3.5" />
+                      <FloppyDisk className="w-3.5 h-3.5" />
                       Save & Close
                     </button>
                     

@@ -2,12 +2,9 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   motion,
   AnimatePresence,
-  useMotionValue,
-  useTransform,
 } from "framer-motion";
 import {
   Tabs,
-  Button,
   ScrollArea,
   Separator,
   Avatar,
@@ -18,7 +15,6 @@ import {
   Copy,
   FloppyDisk,
   Trash,
-  Download,
   Clock,
   Globe,
   Stack,
@@ -28,16 +24,15 @@ import {
   X,
   DotsThreeVertical,
   MagnifyingGlass,
-  FolderPlus,
   Archive,
-  ArrowsClockwise,
   Check,
-  Tag,
-  List,
   Sparkle,
   Export,
   Plus,
   Minus,
+  Warning,
+  Desktop,
+  WindowsLogo,
 } from "@phosphor-icons/react";
 import type { TabInfo, Session, TabStats } from "../utils/types";
 import "../style.css";
@@ -56,11 +51,22 @@ interface TabActionsProps {
   onDuplicate: (tabId: number) => void;
 }
 
+interface DuplicateInfo {
+  url: string;
+  title: string;
+  count: number;
+  tabs: { id: number; windowId: number; title: string }[];
+}
+
+interface DailyTabCount {
+  date: string;
+  count: number;
+}
+
 // Spring config - faster transitions
 const springConfig = { type: "spring" as const, stiffness: 180, damping: 22 };
-const quickTransition = { duration: 0.15 };
 
-// Quick action button - no scale to avoid layout shift
+// Quick action button
 const QuickActionButton = React.memo(
   ({
     children,
@@ -100,7 +106,7 @@ const QuickActionButton = React.memo(
   },
 );
 
-// Liquid Glass Card Component - faster animations
+// Liquid Glass Card Component
 const GlassCard = React.memo(
   ({
     children,
@@ -125,13 +131,51 @@ const GlassCard = React.memo(
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
       >
-        {/* Inner glow for liquid glass effect */}
         <div className="absolute inset-0 rounded-3xl border border-white/40 pointer-events-none" />
         {children}
       </motion.div>
     );
   },
 );
+
+// Animated Counter
+const AnimatedCounter = React.memo(
+  ({ value, suffix = "" }: { value: number; suffix?: string }) => {
+    return (
+      <motion.span
+        key={value}
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={springConfig}
+        className="tabular-nums"
+      >
+        {value}
+        {suffix}
+      </motion.span>
+    );
+  },
+);
+
+// Stagger animations
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.03,
+      delayChildren: 0.05,
+    },
+  },
+};
+
+const staggerItem = {
+  hidden: { opacity: 0, y: 8 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.2, ease: "easeOut" as const },
+  },
+};
 
 // Tab Actions Popover
 function TabActions({ tab, onClose, onPin, onDuplicate }: TabActionsProps) {
@@ -204,48 +248,154 @@ function TabActions({ tab, onClose, onPin, onDuplicate }: TabActionsProps) {
   );
 }
 
-// Animated Counter
-const AnimatedCounter = React.memo(
-  ({ value, suffix = "" }: { value: number; suffix?: string }) => {
+// Dedup Confirmation Modal
+function DedupConfirmModal({
+  isOpen,
+  duplicates,
+  onConfirm,
+  onCancel,
+}: {
+  isOpen: boolean;
+  duplicates: DuplicateInfo[];
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const totalDuplicates = duplicates.reduce((sum, d) => sum + d.count - 1, 0);
+  const totalToKeep = duplicates.length;
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+          <motion.div
+            initial={{ scale: 0.95, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.95, y: 20 }}
+            className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden"
+          >
+            {/* Header */}
+            <div className="p-5 bg-gradient-to-r from-amber-500 to-orange-500 text-white">
+              <div className="flex items-center gap-3">
+                <Warning className="w-7 h-7" weight="fill" />
+                <div>
+                  <h2 className="text-lg font-bold">Remove Duplicates?</h2>
+                  <p className="text-amber-100 text-sm">
+                    Found {duplicates.length} duplicate URLs ({totalDuplicates} tabs will be closed)
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-5 max-h-[300px] overflow-y-auto">
+              <div className="space-y-2">
+                {duplicates.map((dup, i) => (
+                  <div
+                    key={dup.url}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700"
+                  >
+                    <span className="w-5 h-5 flex items-center justify-center text-xs font-bold text-zinc-400 bg-zinc-200 dark:bg-zinc-700 rounded-full">
+                      {i + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                        {dup.title || new URL(dup.url).hostname}
+                      </p>
+                      <p className="text-xs text-zinc-500 truncate">{dup.url}</p>
+                    </div>
+                    <span className="px-2.5 py-1 text-xs font-semibold bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400 rounded-full">
+                      ×{dup.count}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-5 border-t border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800">
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-sm text-zinc-600 dark:text-zinc-400">
+                  <span className="font-semibold text-zinc-900 dark:text-zinc-100">{totalToKeep}</span> unique URLs will be kept
+                </div>
+                <div className="text-sm text-rose-600 font-medium">
+                  {totalDuplicates} tabs will be closed
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={onCancel}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={onConfirm}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium bg-rose-500 text-white hover:bg-rose-600 rounded-xl transition-colors"
+                >
+                  Remove Duplicates
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// Daily Tabs Chart Component
+function DailyTabsChart({ data }: { data: DailyTabCount[] }) {
+  if (data.length === 0) {
     return (
-      <motion.span
-        key={value}
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={springConfig}
-        className="tabular-nums"
-      >
-        {value}
-        {suffix}
-      </motion.span>
+      <div className="text-center py-8 text-zinc-400">
+        <ChartBar className="w-10 h-10 mx-auto mb-2 opacity-50" weight="regular" />
+        <p className="text-sm">No data yet</p>
+      </div>
     );
-  },
-);
+  }
 
-// Stagger Container for animations - faster
-const staggerContainer = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.03,
-      delayChildren: 0.05,
-    },
-  },
-};
+  const maxCount = Math.max(...data.map((d) => d.count), 1);
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return `${date.getMonth() + 1}/${date.getDate()}`;
+  };
 
-const staggerItem = {
-  hidden: { opacity: 0, y: 8 },
-  show: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.2, ease: [0.16, 1, 0.3, 1] },
-  },
-};
+  return (
+    <div className="space-y-3">
+      <div className="flex items-end justify-between h-32 gap-1">
+        {data.slice(-7).map((day, i) => {
+          const height = (day.count / maxCount) * 100;
+          return (
+            <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
+              <motion.div
+                initial={{ height: 0 }}
+                animate={{ height: `${height}%` }}
+                transition={{ duration: 0.4, delay: i * 0.05 }}
+                className="w-full bg-gradient-to-t from-rose-400 to-rose-500 rounded-t-lg min-h-[4px]"
+              />
+              <span className="text-[9px] text-zinc-400">{formatDate(day.date)}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex items-center justify-between text-xs text-zinc-500">
+        <span>Daily Total Tabs</span>
+        <span className="font-medium text-zinc-700">
+          Avg: {Math.round(data.reduce((a, b) => a + b.count, 0) / data.length)}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 export default function Popup() {
   const [activeTab, setActiveTab] = useState("current");
-  const [tabs, setTabs] = useState<TabInfo[]>([]);
+  const [tabs, setTabs] = useState<(TabInfo & { windowId?: number })[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [stats, setStats] = useState<{
     tabStats: TabStats[];
@@ -259,7 +409,14 @@ export default function Popup() {
   const [selectedTabs, setSelectedTabs] = useState<Set<number>>(new Set());
   const [showBatchActions, setShowBatchActions] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+  const [windows, setWindows] = useState<chrome.windows.Window[]>([]);
+
+  // Duplicate detection
+  const [duplicates, setDuplicates] = useState<DuplicateInfo[]>([]);
+  const [showDedupConfirm, setShowDedupConfirm] = useState(false);
+
+  // Daily tab counts for chart
+  const [dailyTabCounts, setDailyTabCounts] = useState<DailyTabCount[]>([]);
 
   // Sync status
   const [syncStatus, setSyncStatus] = useState({
@@ -273,9 +430,51 @@ export default function Popup() {
   useEffect(() => {
     loadData();
     checkSyncStatus();
-    const interval = setInterval(checkSyncStatus, 5000);
+    loadDailyTabCounts();
+    const interval = setInterval(() => {
+      loadData();
+      checkDuplicateInfo();
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  const loadDailyTabCounts = async () => {
+    const result = await chrome.storage.local.get('dtt_daily_tab_counts');
+    const counts = result['dtt_daily_tab_counts'] || [];
+    setDailyTabCounts(counts);
+  };
+
+  const saveDailyTabCount = async () => {
+    const today = new Date().toISOString().split('T')[0];
+    const result = await chrome.storage.local.get('dtt_daily_tab_counts');
+    const counts: DailyTabCount[] = result['dtt_daily_tab_counts'] || [];
+
+    const existingIndex = counts.findIndex(c => c.date === today);
+    if (existingIndex >= 0) {
+      counts[existingIndex].count = tabs.length;
+    } else {
+      counts.push({ date: today, count: tabs.length });
+    }
+
+    // Keep only last 30 days
+    if (counts.length > 30) {
+      counts.shift();
+    }
+
+    await chrome.storage.local.set({ 'dtt_daily_tab_counts': counts });
+    setDailyTabCounts(counts);
+  };
+
+  const checkDuplicateInfo = async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'getDuplicateInfo' });
+      if (response?.success) {
+        setDuplicates(response.duplicates);
+      }
+    } catch (error) {
+      console.error('Failed to get duplicate info:', error);
+    }
+  };
 
   const checkSyncStatus = async () => {
     try {
@@ -296,13 +495,31 @@ export default function Popup() {
 
   const loadData = async () => {
     await Promise.all([loadCurrentTabs(), loadSessions(), loadStats()]);
+    await checkDuplicateInfo();
   };
 
   const loadCurrentTabs = async () => {
-    const response = await chrome.runtime.sendMessage({ action: "getTabs" });
-    if (response.success) {
-      setTabs(response.data);
+    const [tabResponse, windowResponse] = await Promise.all([
+      chrome.runtime.sendMessage({ action: "getTabs" }),
+      chrome.windows.getAll({ populate: false }),
+    ]);
+    if (tabResponse.success) {
+      setTabs(tabResponse.data);
+      setWindows(windowResponse);
       setSelectedTabs(new Set());
+      // Save daily count
+      const today = new Date().toISOString().split('T')[0];
+      const result = await chrome.storage.local.get('dtt_daily_tab_counts');
+      const counts: DailyTabCount[] = result['dtt_daily_tab_counts'] || [];
+      const existingIndex = counts.findIndex(c => c.date === today);
+      if (existingIndex >= 0) {
+        counts[existingIndex].count = tabResponse.data.length;
+      } else {
+        counts.push({ date: today, count: tabResponse.data.length });
+      }
+      if (counts.length > 30) counts.shift();
+      await chrome.storage.local.set({ 'dtt_daily_tab_counts': counts });
+      setDailyTabCounts(counts);
     }
   };
 
@@ -337,9 +554,27 @@ export default function Popup() {
     );
   }, [tabs, searchQuery]);
 
-  // Group filtered tabs by domain
-  const groupedTabs = useMemo(() => {
-    return filteredTabs.reduce((acc, tab) => {
+  // Group filtered tabs by window then domain
+  const groupedByWindow = useMemo(() => {
+    const windowMap = new Map<number, { window: chrome.windows.Window | undefined; tabs: TabInfo[] }>();
+
+    filteredTabs.forEach((tab) => {
+      const windowId = tab.windowId || 0;
+      if (!windowMap.has(windowId)) {
+        windowMap.set(windowId, {
+          window: windows.find(w => w.id === windowId),
+          tabs: [],
+        });
+      }
+      windowMap.get(windowId)!.tabs.push(tab);
+    });
+
+    return windowMap;
+  }, [filteredTabs, windows]);
+
+  // Group tabs by domain within each window
+  const groupTabsByDomain = (tabs: TabInfo[]) => {
+    return tabs.reduce((acc, tab) => {
       try {
         const domain =
           new URL(tab.url).hostname.replace(/^www\./, "") || "Other";
@@ -351,7 +586,7 @@ export default function Popup() {
       }
       return acc;
     }, {} as TabGroup);
-  }, [filteredTabs]);
+  };
 
   // Action handlers
   const handleGroup = async () => {
@@ -362,7 +597,16 @@ export default function Popup() {
     loadCurrentTabs();
   };
 
-  const handleDeduplicate = async () => {
+  const handleDeduplicateClick = async () => {
+    if (duplicates.length === 0) {
+      showMessage("No duplicates found", "info");
+      return;
+    }
+    setShowDedupConfirm(true);
+  };
+
+  const handleConfirmDeduplicate = async () => {
+    setShowDedupConfirm(false);
     setLoading("dedup");
     const response = await chrome.runtime.sendMessage({
       action: "deduplicate",
@@ -479,7 +723,7 @@ export default function Popup() {
   };
 
   const totalTabs = filteredTabs.length;
-  const totalGroups = Object.keys(groupedTabs).length;
+  const totalWindows = groupedByWindow.size;
 
   return (
     <div className="w-[440px] h-[600px] bg-zinc-50 text-zinc-900 font-sans selection:bg-rose-100 selection:text-rose-900 flex flex-col overflow-hidden relative">
@@ -490,7 +734,15 @@ export default function Popup() {
         [data-state="inactive"] { display: none !important; }
       `}</style>
 
-      {/* Header - Asymmetric Bento Style */}
+      {/* Dedup Confirmation Modal */}
+      <DedupConfirmModal
+        isOpen={showDedupConfirm}
+        duplicates={duplicates}
+        onConfirm={handleConfirmDeduplicate}
+        onCancel={() => setShowDedupConfirm(false)}
+      />
+
+      {/* Header */}
       <div className="px-5 pt-5 pb-4 space-y-4 flex-shrink-0">
         {/* AI Assistant Overlay */}
         <AnimatePresence>
@@ -560,7 +812,7 @@ export default function Popup() {
                 </div>
                 <div className="max-h-[300px] overflow-y-auto pr-1">
                   <ExportPanel
-                    tabs={filteredTabs}
+                    tabs={filteredTabs as any}
                     selectedTabIds={selectedTabs}
                     onExportComplete={() => {
                       setShowExport(false);
@@ -593,12 +845,29 @@ export default function Popup() {
                   <AnimatedCounter value={totalTabs} />
                 </span>
                 <span className="text-zinc-300">|</span>
-                <span>{totalGroups} groups</span>
+                <span className="flex items-center gap-1">
+                  <WindowsLogo className="w-3 h-3" />
+                  {totalWindows} windows
+                </span>
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Duplicate Alert */}
+            {duplicates.length > 0 && (
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-600"
+              >
+                <Warning className="w-3.5 h-3.5" weight="fill" />
+                <span className="text-[10px] font-medium">
+                  {duplicates.length} dup
+                </span>
+              </motion.div>
+            )}
+
             {/* AI Assistant Toggle */}
             <motion.button
               onClick={() => setShowAI(!showAI)}
@@ -691,11 +960,18 @@ export default function Popup() {
 
           <motion.div variants={staggerItem}>
             <QuickActionButton
-              onClick={handleDeduplicate}
-              className="w-full flex-col gap-1.5 py-3"
-              variant="secondary"
+              onClick={handleDeduplicateClick}
+              className="w-full flex-col gap-1.5 py-3 relative"
+              variant={duplicates.length > 0 ? "danger" : "secondary"}
             >
-              <Copy className="w-4 h-4" weight="regular" />
+              <div className="relative">
+                <Copy className="w-4 h-4" weight="regular" />
+                {duplicates.length > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                    {duplicates.length}
+                  </span>
+                )}
+              </div>
               <span>Dedup</span>
             </QuickActionButton>
           </motion.div>
@@ -847,111 +1123,130 @@ export default function Popup() {
           <ScrollArea.Root className="flex-1" style={{ minHeight: 0 }}>
             <ScrollArea.Viewport className="h-full px-5 pb-5">
               <motion.div
-                className="space-y-3"
+                className="space-y-4"
                 variants={staggerContainer}
                 initial="hidden"
                 animate="show"
               >
-                {Object.entries(groupedTabs).map(
-                  ([domain, domainTabs], groupIndex) => (
-                    <motion.div key={domain} variants={staggerItem} layout>
-                      <GlassCard className="overflow-hidden">
-                        {/* Group Header */}
-                        <div className="flex items-center justify-between px-4 py-3 bg-zinc-50/50 border-b border-zinc-100">
-                          <div className="flex items-center gap-2.5">
-                            <Avatar.Root className="w-6 h-6 rounded-lg bg-white border border-zinc-200 flex items-center justify-center">
-                              <Avatar.Fallback className="text-[9px] font-bold text-zinc-400 uppercase">
-                                {domain[0]}
-                              </Avatar.Fallback>
-                            </Avatar.Root>
-                            <span className="text-xs font-medium text-zinc-700 truncate max-w-[140px]">
-                              {domain}
-                            </span>
+                {Array.from(groupedByWindow.entries()).map(([windowId, windowData], windowIndex) => {
+                  const groupedDomains = groupTabsByDomain(windowData.tabs);
+                  return (
+                    <motion.div key={windowId} variants={staggerItem} className="space-y-3">
+                      {/* Window Header */}
+                      <div className="flex items-center gap-2 px-1">
+                        <Desktop className="w-3.5 h-3.5 text-zinc-400" weight="regular" />
+                        <span className="text-[11px] font-medium text-zinc-500">
+                          Window {windowIndex + 1}
+                          {windowData.window?.focused && (
+                            <span className="ml-1.5 px-1.5 py-0.5 bg-rose-100 text-rose-600 rounded text-[9px]">Active</span>
+                          )}
+                        </span>
+                        <span className="text-[10px] text-zinc-400">({windowData.tabs.length} tabs)</span>
+                      </div>
+
+                      {/* Domain Groups */}
+                      {Object.entries(groupedDomains).map(([domain, domainTabs]) => (
+                        <GlassCard key={`${windowId}-${domain}`} className="overflow-hidden">
+                          {/* Group Header */}
+                          <div className="flex items-center justify-between px-4 py-3 bg-zinc-50/50 border-b border-zinc-100">
+                            <div className="flex items-center gap-2.5">
+                              <Avatar.Root className="w-6 h-6 rounded-lg bg-white border border-zinc-200 flex items-center justify-center">
+                                <Avatar.Fallback className="text-[9px] font-bold text-zinc-400 uppercase">
+                                  {domain[0]}
+                                </Avatar.Fallback>
+                              </Avatar.Root>
+                              <span className="text-xs font-medium text-zinc-700 truncate max-w-[140px]">
+                                {domain}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-0.5 bg-zinc-200/60 text-zinc-600 text-[10px] font-medium rounded-full transition-colors hover:bg-zinc-300/60">
+                                {domainTabs.length}
+                              </span>
+                            </div>
                           </div>
 
-                          <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 bg-zinc-200/60 text-zinc-600 text-[10px] font-medium rounded-full transition-colors hover:bg-zinc-300/60">
-                              {domainTabs.length}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Tab List */}
-                        <div className="divide-y divide-zinc-100/50">
-                          {domainTabs.map((tab, tabIndex) => (
-                            <motion.div
-                              key={tab.id}
-                              className={`group flex items-center gap-2.5 px-4 py-2.5 transition-colors ${
-                                tab.active
-                                  ? "bg-rose-50/30"
-                                  : "hover:bg-zinc-50/50"
-                              }`}
-                              initial={{ opacity: 0, x: -8 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{
-                                delay: tabIndex * 0.02,
-                                duration: 0.15,
-                                ease: [0.16, 1, 0.3, 1],
-                              }}
-                            >
-                              <label className="flex items-center cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={selectedTabs.has(tab.id)}
-                                  onChange={() => toggleTabSelection(tab.id)}
-                                  className="w-3.5 h-3.5 rounded border-zinc-300 text-rose-500 focus:ring-rose-500/20"
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                              </label>
-
-                              <div
-                                className="flex-1 flex items-center gap-2 min-w-0 cursor-pointer"
-                                onClick={() =>
-                                  chrome.tabs.update(tab.id, { active: true })
-                                }
+                          {/* Tab List */}
+                          <div className="divide-y divide-zinc-100/50">
+                            {domainTabs.map((tab, tabIndex) => (
+                              <motion.div
+                                key={tab.id}
+                                className={`group flex items-center gap-2.5 px-4 py-2.5 transition-colors ${
+                                  tab.active
+                                    ? "bg-rose-50/30"
+                                    : "hover:bg-zinc-50/50"
+                                }`}
+                                initial={{ opacity: 0, x: -8 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{
+                                  delay: tabIndex * 0.02,
+                                  duration: 0.15,
+                                  ease: [0.16, 1, 0.3, 1],
+                                }}
                               >
-                                {tab.pinned && (
-                                  <PushPin
-                                    className="w-3 h-3 text-amber-400 flex-shrink-0 fill-amber-400"
-                                    weight="fill"
+                                <label className="flex items-center cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedTabs.has(tab.id)}
+                                    onChange={() => toggleTabSelection(tab.id)}
+                                    className="w-3.5 h-3.5 rounded border-zinc-300 text-rose-500 focus:ring-rose-500/20"
+                                    onClick={(e) => e.stopPropagation()}
                                   />
-                                )}
+                                </label>
 
-                                <span
-                                  className={`flex-1 text-[11px] truncate ${
-                                    tab.active
-                                      ? "text-rose-600 font-medium"
-                                      : "text-zinc-700"
-                                  }`}
+                                <div
+                                  className="flex-1 flex items-center gap-2 min-w-0 cursor-pointer"
+                                  onClick={() => {
+                                    chrome.tabs.update(tab.id, { active: true });
+                                    if (tab.windowId) {
+                                      chrome.windows.update(tab.windowId, { focused: true });
+                                    }
+                                  }}
                                 >
-                                  {tab.title || tab.url}
-                                </span>
+                                  {tab.pinned && (
+                                    <PushPin
+                                      className="w-3 h-3 text-amber-400 flex-shrink-0 fill-amber-400"
+                                      weight="fill"
+                                    />
+                                  )}
 
-                                {tab.active && (
-                                  <motion.div
-                                    className="w-1.5 h-1.5 rounded-full bg-rose-500 flex-shrink-0"
-                                    animate={{ scale: [1, 1.2, 1] }}
-                                    transition={{
-                                      duration: 2,
-                                      repeat: Infinity,
-                                    }}
-                                  />
-                                )}
-                              </div>
+                                  <span
+                                    className={`flex-1 text-[11px] truncate ${
+                                      tab.active
+                                        ? "text-rose-600 font-medium"
+                                        : "text-zinc-700"
+                                    }`}
+                                  >
+                                    {tab.title || tab.url}
+                                  </span>
 
-                              <TabActions
-                                tab={tab}
-                                onClose={handleCloseTab}
-                                onPin={handlePinTab}
-                                onDuplicate={handleDuplicateTab}
-                              />
-                            </motion.div>
-                          ))}
-                        </div>
-                      </GlassCard>
+                                  {tab.active && (
+                                    <motion.div
+                                      className="w-1.5 h-1.5 rounded-full bg-rose-500 flex-shrink-0"
+                                      animate={{ scale: [1, 1.2, 1] }}
+                                      transition={{
+                                        duration: 2,
+                                        repeat: Infinity,
+                                      }}
+                                    />
+                                  )}
+                                </div>
+
+                                <TabActions
+                                  tab={tab}
+                                  onClose={handleCloseTab}
+                                  onPin={handlePinTab}
+                                  onDuplicate={handleDuplicateTab}
+                                />
+                              </motion.div>
+                            ))}
+                          </div>
+                        </GlassCard>
+                      ))}
                     </motion.div>
-                  ),
-                )}
+                  );
+                })}
               </motion.div>
             </ScrollArea.Viewport>
             <ScrollArea.Scrollbar className="w-1.5 bg-transparent rounded-full p-px">
@@ -1116,6 +1411,23 @@ export default function Popup() {
                       </p>
                     </div>
                   </div>
+                </GlassCard>
+
+                {/* Daily Tabs Chart */}
+                <GlassCard className="p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center">
+                        <ChartBar className="w-4 h-4 text-blue-500" weight="regular" />
+                      </div>
+                      <div>
+                        <h3 className="text-xs font-semibold text-zinc-900">Daily Tab Count</h3>
+                        <p className="text-[10px] text-zinc-500">Total tabs across all windows</p>
+                      </div>
+                    </div>
+                    <span className="text-xl font-bold text-zinc-900">{totalTabs}</span>
+                  </div>
+                  <DailyTabsChart data={dailyTabCounts} />
                 </GlassCard>
 
                 {/* Top Domains */}
