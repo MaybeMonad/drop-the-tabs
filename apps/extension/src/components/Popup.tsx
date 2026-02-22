@@ -994,9 +994,9 @@ export default function Popup() {
     return windowMap;
   }, [filteredTabs, windows]);
 
-  // Group tabs by domain within each window
+  // Group tabs by domain within each window and sort by count (descending)
   const groupTabsByDomain = (tabs: TabInfo[]) => {
-    return tabs.reduce((acc, tab) => {
+    const grouped = tabs.reduce((acc, tab) => {
       try {
         const domain =
           new URL(tab.url).hostname.replace(/^www\./, "") || "Other";
@@ -1008,6 +1008,10 @@ export default function Popup() {
       }
       return acc;
     }, {} as TabGroup);
+    
+    // Sort by count descending
+    const sortedEntries = Object.entries(grouped).sort((a, b) => b[1].length - a[1].length);
+    return Object.fromEntries(sortedEntries);
   };
 
   // Toggle collapse all groups
