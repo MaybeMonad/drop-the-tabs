@@ -1,7 +1,7 @@
 // Obsidian export UI components
 import React, { useState } from 'react';
 import { Button } from '@base-ui-components/react';
-import { Download, Folder, FileText, Copy, Check } from "@phosphor-icons/react";
+import { Download, Folder, FolderOpen, FileText, Copy, Check } from "@phosphor-icons/react";
 import type { CategorizedTab } from '../utils/contentCategory';
 import { exportToObsidian, exportAsSession, copyAsMarkdownList, type ObsidianExportOptions } from '../services/obsidianExport';
 
