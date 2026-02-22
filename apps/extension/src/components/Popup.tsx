@@ -65,11 +65,35 @@ export default function Popup() {
   
   // 搜索相关状态
   const [searchQuery, setSearchQuery] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
+  
+  // 同步状态
+  const [syncStatus, setSyncStatus] = useState({
+    connected: false,
+    userId: null as string | null,
+    deviceId: null as string | null,
+  });
 
   useEffect(() => {
     loadData();
+    checkSyncStatus();
+    const interval = setInterval(checkSyncStatus, 5000);
+    return () => clearInterval(interval);
   }, []);
+
+  const checkSyncStatus = async () => {
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'getSyncStatus' });
+      if (response?.success) {
+        setSyncStatus({
+          connected: response.connected,
+          userId: response.userId,
+          deviceId: response.deviceId,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to get sync status:', error);
+    }
+  };
 
   const loadData = async () => {
     try {
