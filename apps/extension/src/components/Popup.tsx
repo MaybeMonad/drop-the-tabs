@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import {
+  motion,
+  AnimatePresence,
+  useMotionValue,
+  useTransform,
+} from "framer-motion";
 import {
   Tabs,
   Button,
@@ -6,48 +12,39 @@ import {
   Separator,
   Avatar,
   Popover,
-  AlertDialog,
-} from '@base-ui-components/react';
+} from "@base-ui-components/react";
 import {
-  LayoutGrid,
+  SquaresFour,
   Copy,
-  Save,
-  Trash2,
+  FloppyDisk,
+  Trash,
   Download,
   Clock,
   Globe,
-  Layers,
-  BarChart3,
-  ChevronRight,
-  Pin,
+  Stack,
+  ChartBar,
+  CaretRight,
+  PushPin,
   X,
-  MoreVertical,
-  Search,
-  ExternalLink,
-  GripVertical,
+  DotsThreeVertical,
+  MagnifyingGlass,
   FolderPlus,
   Archive,
-  RefreshCw,
+  ArrowsClockwise,
   Check,
-  Sparkles,
-} from 'lucide-react';
-import type { TabInfo, Session, TabStats } from '../utils/types';
-import '../style.css';
+  Tag,
+  List,
+  Sparkle,
+  Export,
+  Plus,
+  Minus,
+} from "@phosphor-icons/react";
+import type { TabInfo, Session, TabStats } from "../utils/types";
+import "../style.css";
+import { NaturalLanguageCommand } from "./NaturalLanguageCommand";
+import { ExportPanel } from "./ExportPanel";
 
-// Import categorization components
-import {
-  CategoryBadge,
-  StatusBadge,
-  PriorityBadge,
-  CategoryFilter,
-  StatusFilter,
-  TabQuickActions,
-} from './CategoryUI';
-import { ExportPanel } from './ExportPanel';
-import { NaturalLanguageCommand } from './NaturalLanguageCommand';
-import type { ContentCategory, TabStatus, TabPriority, CategorizedTab } from '../utils/contentCategory';
-import { CATEGORY_META, STATUS_META, PRIORITY_META, categorizeTab, detectCategory } from '../utils/contentCategory';
-
+// Types
 interface TabGroup {
   [key: string]: TabInfo[];
 }
@@ -59,150 +56,210 @@ interface TabActionsProps {
   onDuplicate: (tabId: number) => void;
 }
 
+// Spring config - faster transitions
+const springConfig = { type: "spring" as const, stiffness: 180, damping: 22 };
+const quickTransition = { duration: 0.15 };
+
+// Quick action button - no scale to avoid layout shift
+const QuickActionButton = React.memo(
+  ({
+    children,
+    onClick,
+    className,
+    variant = "primary",
+  }: {
+    children: React.ReactNode;
+    onClick?: () => void;
+    className?: string;
+    variant?: "primary" | "secondary" | "ghost" | "danger";
+  }) => {
+    const baseStyles =
+      "relative flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-medium transition-all duration-150 active:translate-y-[1px] cursor-pointer pointer-events-auto";
+    const variants = {
+      primary:
+        "bg-zinc-900 text-white hover:bg-zinc-800 hover:shadow-[0_4px_12px_rgba(0,0,0,0.12)]",
+      secondary:
+        "bg-white text-zinc-700 border border-zinc-200/60 hover:border-zinc-300 hover:bg-zinc-50 hover:-translate-y-[1px] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06)]",
+      ghost: "text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100/50",
+      danger:
+        "bg-rose-500 text-white hover:bg-rose-600 shadow-[0_2px_8px_rgba(225,29,72,0.2)]",
+    };
+
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick?.();
+        }}
+        className={`${baseStyles} ${variants[variant]} ${className || ""}`}
+      >
+        {children}
+      </button>
+    );
+  },
+);
+
+// Liquid Glass Card Component - faster animations
+const GlassCard = React.memo(
+  ({
+    children,
+    className,
+    hover = true,
+  }: {
+    children: React.ReactNode;
+    className?: string;
+    hover?: boolean;
+  }) => {
+    return (
+      <motion.div
+        className={`
+        relative bg-white rounded-3xl
+        border border-zinc-200/50
+        shadow-[0_4px_20px_rgba(0,0,0,0.03)]
+        ${hover ? "hover:shadow-[0_8px_24px_rgba(0,0,0,0.05)] hover:border-zinc-300/50" : ""}
+        transition-shadow duration-200
+        ${className || ""}
+      `}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+      >
+        {/* Inner glow for liquid glass effect */}
+        <div className="absolute inset-0 rounded-3xl border border-white/40 pointer-events-none" />
+        {children}
+      </motion.div>
+    );
+  },
+);
+
+// Tab Actions Popover
 function TabActions({ tab, onClose, onPin, onDuplicate }: TabActionsProps) {
   const [open, setOpen] = useState(false);
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger
-        className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all"
+        className="p-1.5 rounded-xl opacity-0 group-hover:opacity-100 hover:bg-zinc-100 transition-all duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        <MoreVertical className="w-3.5 h-3.5 text-zinc-400" />
+        <DotsThreeVertical className="w-4 h-4 text-zinc-400" weight="regular" />
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Positioner side="right" align="start" sideOffset={4}>
-          <Popover.Popup className="min-w-[160px] bg-white dark:bg-zinc-900 rounded-lg shadow-xl border border-zinc-200 dark:border-zinc-800 py-1 z-50">
-            <Popover.Arrow className="fill-white dark:fill-zinc-900 stroke-zinc-200 dark:stroke-zinc-800" />
-            
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onPin(tab.id, !tab.pinned);
-                setOpen(false);
-              }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-            >
-              <Pin className={`w-3.5 h-3.5 ${tab.pinned ? 'fill-amber-500 text-amber-500' : ''}`} />
-              {tab.pinned ? 'Unpin Tab' : 'Pin Tab'}
-            </button>
-            
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDuplicate(tab.id);
-                setOpen(false);
-              }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              Duplicate
-            </button>
-            
-            <Separator className="my-1 bg-zinc-200 dark:bg-zinc-800" />
-            
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onClose(tab.id);
-                setOpen(false);
-              }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
-              Close Tab
-            </button>
-          </Popover.Popup>
+        <Popover.Positioner side="right" align="start" sideOffset={6}>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, x: -10 }}
+            animate={{ opacity: 1, scale: 1, x: 0 }}
+            exit={{ opacity: 0, scale: 0.95, x: -10 }}
+            transition={springConfig}
+          >
+            <Popover.Popup className="min-w-[160px] bg-white/95 backdrop-blur-xl rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.12)] border border-zinc-200/60 py-1.5 z-50 overflow-hidden">
+              <div className="absolute inset-0 rounded-2xl border border-white/50 pointer-events-none" />
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPin(tab.id, !tab.pinned);
+                  setOpen(false);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-100/80 transition-colors"
+              >
+                <PushPin
+                  className={`w-3.5 h-3.5 ${tab.pinned ? "fill-amber-400 text-amber-500" : "text-zinc-400"}`}
+                  weight="fill"
+                />
+                {tab.pinned ? "Unpin Tab" : "Pin Tab"}
+              </button>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDuplicate(tab.id);
+                  setOpen(false);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-700 hover:bg-zinc-100/80 transition-colors"
+              >
+                <Copy className="w-3.5 h-3.5 text-zinc-400" weight="regular" />
+                Duplicate
+              </button>
+
+              <Separator className="my-1 bg-zinc-100" />
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose(tab.id);
+                  setOpen(false);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-rose-600 hover:bg-rose-50/80 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" weight="regular" />
+                Close Tab
+              </button>
+            </Popover.Popup>
+          </motion.div>
         </Popover.Positioner>
       </Popover.Portal>
     </Popover.Root>
   );
 }
 
-interface GroupActionsProps {
-  domain: string;
-  tabs: TabInfo[];
-  onCloseGroup: (domain: string) => void;
-  onSaveGroup: (domain: string, tabs: TabInfo[]) => void;
-  onGroupTabs: (domain: string) => void;
-}
-
-function GroupActions({ domain, tabs, onCloseGroup, onSaveGroup, onGroupTabs }: GroupActionsProps) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger
-        className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-all"
-        onClick={(e) => e.stopPropagation()}
+// Animated Counter
+const AnimatedCounter = React.memo(
+  ({ value, suffix = "" }: { value: number; suffix?: string }) => {
+    return (
+      <motion.span
+        key={value}
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={springConfig}
+        className="tabular-nums"
       >
-        <MoreVertical className="w-3.5 h-3.5 text-zinc-400" />
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Positioner side="bottom" align="end" sideOffset={4}>
-          <Popover.Popup className="min-w-[180px] bg-white dark:bg-zinc-900 rounded-lg shadow-xl border border-zinc-200 dark:border-zinc-800 py-1 z-50">
-            <Popover.Arrow className="fill-white dark:fill-zinc-900 stroke-zinc-200 dark:stroke-zinc-800" />
-            
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onGroupTabs(domain);
-                setOpen(false);
-              }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              Group These Tabs
-            </button>
-            
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onSaveGroup(domain, tabs);
-                setOpen(false);
-              }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-            >
-              <FolderPlus className="w-3.5 h-3.5" />
-              Save as Session
-            </button>
-            
-            <Separator className="my-1 bg-zinc-200 dark:bg-zinc-800" />
-            
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onCloseGroup(domain);
-                setOpen(false);
-              }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              Close All ({tabs.length})
-            </button>
-          </Popover.Popup>
-        </Popover.Positioner>
-      </Popover.Portal>
-    </Popover.Root>
-  );
-}
+        {value}
+        {suffix}
+      </motion.span>
+    );
+  },
+);
+
+// Stagger Container for animations - faster
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.03,
+      delayChildren: 0.05,
+    },
+  },
+};
+
+const staggerItem = {
+  hidden: { opacity: 0, y: 8 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.2, ease: [0.16, 1, 0.3, 1] },
+  },
+};
 
 export default function Popup() {
-  const [activeTab, setActiveTab] = useState('current');
-  const [tabs, setTabs] = useState<CategorizedTab[]>([]);
+  const [activeTab, setActiveTab] = useState("current");
+  const [tabs, setTabs] = useState<TabInfo[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [stats, setStats] = useState<{ tabStats: TabStats[]; dailyStats: any[] }>({ tabStats: [], dailyStats: [] });
+  const [stats, setStats] = useState<{
+    tabStats: TabStats[];
+    dailyStats: any[];
+  }>({ tabStats: [], dailyStats: [] });
   const [loading, setLoading] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ type: 'success' | 'info' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<{
+    type: "success" | "info" | "error";
+    text: string;
+  } | null>(null);
   const [selectedTabs, setSelectedTabs] = useState<Set<number>>(new Set());
   const [showBatchActions, setShowBatchActions] = useState(false);
-
-  // Search and filter state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<ContentCategory | null>(null);
-  const [selectedStatus, setSelectedStatus] = useState<TabStatus | null>(null);
-  const [categoryStats, setCategoryStats] = useState<Record<string, number>>({});
-  const [statusStats, setStatusStats] = useState<Record<string, number>>({});
+  const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
 
   // Sync status
   const [syncStatus, setSyncStatus] = useState({
@@ -210,9 +267,8 @@ export default function Popup() {
     userId: null as string | null,
     deviceId: null as string | null,
   });
-
-  // Export panel
-  const [showExportPanel, setShowExportPanel] = useState(false);
+  const [showAI, setShowAI] = useState(false);
+  const [showExport, setShowExport] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -223,7 +279,9 @@ export default function Popup() {
 
   const checkSyncStatus = async () => {
     try {
-      const response = await chrome.runtime.sendMessage({ action: 'getSyncStatus' });
+      const response = await chrome.runtime.sendMessage({
+        action: "getSyncStatus",
+      });
       if (response?.success) {
         setSyncStatus({
           connected: response.connected,
@@ -232,321 +290,176 @@ export default function Popup() {
         });
       }
     } catch (error) {
-      console.error('Failed to get sync status:', error);
+      console.error("Failed to get sync status:", error);
     }
   };
 
   const loadData = async () => {
-    await Promise.all([loadCurrentTabs(), loadSessions(), loadStats(), loadStatsData()]);
+    await Promise.all([loadCurrentTabs(), loadSessions(), loadStats()]);
   };
 
   const loadCurrentTabs = async () => {
-    const response = await chrome.runtime.sendMessage({ action: 'getCategorizedTabs' });
+    const response = await chrome.runtime.sendMessage({ action: "getTabs" });
     if (response.success) {
       setTabs(response.data);
       setSelectedTabs(new Set());
     }
   };
 
-  const loadStatsData = async () => {
-    const [catResponse, statusResponse] = await Promise.all([
-      chrome.runtime.sendMessage({ action: 'getCategoryStats' }),
-      chrome.runtime.sendMessage({ action: 'getStatusStats' }),
-    ]);
-    if (catResponse.success) setCategoryStats(catResponse.data);
-    if (statusResponse.success) setStatusStats(statusResponse.data);
-  };
-
   const loadSessions = async () => {
-    const response = await chrome.runtime.sendMessage({ action: 'getSessions' });
+    const response = await chrome.runtime.sendMessage({
+      action: "getSessions",
+    });
     if (response.success) setSessions(response.data);
   };
 
   const loadStats = async () => {
-    const response = await chrome.runtime.sendMessage({ action: 'getStats' });
+    const response = await chrome.runtime.sendMessage({ action: "getStats" });
     if (response.success) setStats(response.data);
   };
 
-  const showMessage = (text: string, type: 'success' | 'info' | 'error' = 'info') => {
-    setMessage({ text, type });
-    setTimeout(() => setMessage(null), 3000);
-  };
+  const showMessage = useCallback(
+    (text: string, type: "success" | "info" | "error" = "info") => {
+      setMessage({ text, type });
+      setTimeout(() => setMessage(null), 3000);
+    },
+    [],
+  );
 
-  // Filter tabs based on search, category, and status
+  // Filter tabs based on search
   const filteredTabs = useMemo(() => {
-    return tabs.filter(tab => {
-      // Search filter
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        const matchesSearch = tab.title?.toLowerCase().includes(query) ||
-                             tab.url?.toLowerCase().includes(query);
-        if (!matchesSearch) return false;
-      }
-      
-      // Category filter
-      if (selectedCategory && tab.category !== selectedCategory) {
-        return false;
-      }
-      
-      // Status filter
-      if (selectedStatus && tab.status !== selectedStatus) {
-        return false;
-      }
-      
-      return true;
-    });
-  }, [tabs, searchQuery, selectedCategory, selectedStatus]);
+    if (!searchQuery.trim()) return tabs;
+    const query = searchQuery.toLowerCase();
+    return tabs.filter(
+      (tab) =>
+        tab.title?.toLowerCase().includes(query) ||
+        tab.url?.toLowerCase().includes(query),
+    );
+  }, [tabs, searchQuery]);
 
-  // Group filtered tabs by category (new) or domain
+  // Group filtered tabs by domain
   const groupedTabs = useMemo(() => {
-    // If filtering by category, group by domain within category
-    // Otherwise group by category first
-    if (selectedCategory) {
-      return filteredTabs.reduce((acc, tab) => {
-        try {
-          const domain = new URL(tab.url).hostname.replace(/^www\./, '') || 'Other';
-          if (!acc[domain]) acc[domain] = [];
-          acc[domain].push(tab);
-        } catch {
-          if (!acc['Other']) acc['Other'] = [];
-          acc['Other'].push(tab);
-        }
-        return acc;
-      }, {} as Record<string, CategorizedTab[]>);
-    } else {
-      // Group by category
-      return filteredTabs.reduce((acc, tab) => {
-        const category = tab.category || 'other';
-        if (!acc[category]) acc[category] = [];
-        acc[category].push(tab);
-        return acc;
-      }, {} as Record<string, CategorizedTab[]>);
-    }
-  }, [filteredTabs, selectedCategory]);
+    return filteredTabs.reduce((acc, tab) => {
+      try {
+        const domain =
+          new URL(tab.url).hostname.replace(/^www\./, "") || "Other";
+        if (!acc[domain]) acc[domain] = [];
+        acc[domain].push(tab);
+      } catch {
+        if (!acc["Other"]) acc["Other"] = [];
+        acc["Other"].push(tab);
+      }
+      return acc;
+    }, {} as TabGroup);
+  }, [filteredTabs]);
 
-  // Tab categorization handlers
-  const handleUpdateCategory = async (tabId: number, category: ContentCategory) => {
-    try {
-      await chrome.runtime.sendMessage({ action: 'updateTabCategory', tabId, category });
-      loadCurrentTabs();
-      loadStatsData();
-      showMessage('Category updated', 'success');
-    } catch (error) {
-      showMessage('Failed to update category', 'error');
-    }
+  // Action handlers
+  const handleGroup = async () => {
+    setLoading("group");
+    await chrome.runtime.sendMessage({ action: "groupTabs" });
+    showMessage("Tabs organized by domain", "success");
+    setLoading(null);
+    loadCurrentTabs();
   };
 
-  const handleUpdateStatus = async (tabId: number, status: TabStatus) => {
-    try {
-      await chrome.runtime.sendMessage({ action: 'updateTabStatus', tabId, status });
-      loadCurrentTabs();
-      loadStatsData();
-      showMessage(`Marked as ${STATUS_META[status].label}`, 'success');
-    } catch (error) {
-      showMessage('Failed to update status', 'error');
-    }
+  const handleDeduplicate = async () => {
+    setLoading("dedup");
+    const response = await chrome.runtime.sendMessage({
+      action: "deduplicate",
+    });
+    showMessage(`Removed ${response.removed} duplicate tabs`, "success");
+    setLoading(null);
+    loadCurrentTabs();
   };
 
-  const handleUpdatePriority = async (tabId: number, priority: TabPriority) => {
-    try {
-      await chrome.runtime.sendMessage({ action: 'updateTabPriority', tabId, priority });
-      loadCurrentTabs();
-      showMessage(`Priority set to ${PRIORITY_META[priority].label}`, 'success');
-    } catch (error) {
-      showMessage('Failed to update priority', 'error');
-    }
-  };
-
-  const handleAddNote = async (tabId: number) => {
-    const tab = tabs.find(t => t.id === tabId);
-    if (!tab) return;
-    
-    const note = prompt('Add a note:', tab.notes || '');
-    if (note === null) return; // Cancelled
-    
-    try {
-      await chrome.runtime.sendMessage({ action: 'updateTabNotes', tabId, notes: note });
-      loadCurrentTabs();
-      showMessage('Note saved', 'success');
-    } catch (error) {
-      showMessage('Failed to save note', 'error');
-    }
-  };
-
-  // Search result actions
-  const handleSearchGroup = async () => {
-    if (filteredTabs.length < 2) {
-      showMessage('Need at least 2 tabs to group', 'info');
-      return;
-    }
-
-    try {
-      const tabIds = filteredTabs.map(t => t.id);
-      const groupId = await chrome.tabs.group({ tabIds });
-      
-      await chrome.tabGroups.update(groupId, { 
-        title: searchQuery.slice(0, 15) || 'Search Results',
-        color: 'green'
-      });
-      
-      showMessage(`Grouped ${filteredTabs.length} tabs`, 'success');
-      loadCurrentTabs();
-      setSearchQuery('');
-    } catch (error) {
-      showMessage('Failed to group tabs', 'error');
-    }
-  };
-
-  const handleSearchSave = async () => {
-    const name = prompt('Session name:', `Search: ${searchQuery}`);
-    if (!name) return;
-
-    try {
-      const session = {
-        id: Date.now().toString(),
-        name,
-        createdAt: Date.now(),
-        tabs: filteredTabs.map(tab => ({
-          url: tab.url,
-          title: tab.title,
-          favicon: tab.favicon,
-          pinned: tab.pinned,
-        }))
-      };
-
-      await chrome.runtime.sendMessage({ action: 'saveCustomSession', session });
-      showMessage(`Saved ${filteredTabs.length} tabs as session`, 'success');
+  const handleSaveSession = async () => {
+    const name = prompt(
+      "Session name:",
+      `Session ${new Date().toLocaleString()}`,
+    );
+    if (name) {
+      setLoading("save");
+      await chrome.runtime.sendMessage({ action: "saveSession", name });
+      showMessage("Session saved", "success");
+      setLoading(null);
       loadSessions();
-    } catch (error) {
-      showMessage('Failed to save session', 'error');
     }
   };
 
-  const handleSearchClose = async () => {
-    if (!confirm(`Close ${filteredTabs.length} filtered tabs?`)) return;
-    
-    try {
-      const closableTabs = filteredTabs.filter(t => !t.pinned);
-      await chrome.tabs.remove(closableTabs.map(t => t.id));
-      showMessage(`Closed ${closableTabs.length} tabs`, 'success');
-      loadCurrentTabs();
-      setSearchQuery('');
-    } catch (error) {
-      showMessage('Failed to close tabs', 'error');
-    }
-  };
-
-  // Individual tab actions
   const handleCloseTab = async (tabId: number) => {
     try {
       await chrome.tabs.remove(tabId);
-      showMessage('Tab closed', 'success');
+      showMessage("Tab closed", "success");
       loadCurrentTabs();
     } catch (error) {
-      showMessage('Failed to close tab', 'error');
+      showMessage("Failed to close tab", "error");
     }
   };
 
   const handlePinTab = async (tabId: number, pinned: boolean) => {
     try {
       await chrome.tabs.update(tabId, { pinned });
-      showMessage(pinned ? 'Tab pinned' : 'Tab unpinned', 'success');
+      showMessage(pinned ? "Tab pinned" : "Tab unpinned", "success");
       loadCurrentTabs();
     } catch (error) {
-      showMessage('Failed to pin tab', 'error');
+      showMessage("Failed to pin tab", "error");
     }
   };
 
   const handleDuplicateTab = async (tabId: number) => {
     try {
-      const tab = tabs.find(t => t.id === tabId);
+      const tab = tabs.find((t) => t.id === tabId);
       if (tab) {
         await chrome.tabs.create({ url: tab.url });
-        showMessage('Tab duplicated', 'success');
+        showMessage("Tab duplicated", "success");
       }
     } catch (error) {
-      showMessage('Failed to duplicate tab', 'error');
+      showMessage("Failed to duplicate tab", "error");
     }
   };
 
-  // Group actions
-  const handleCloseGroup = async (domain: string) => {
-    if (!confirm(`Close all tabs from ${domain}?`)) return;
-    
-    const groupTabs = groupedTabs[domain] || [];
-    const tabIds = groupTabs.filter(t => !t.pinned).map(t => t.id);
-    
-    if (tabIds.length === 0) {
-      showMessage('No closable tabs (pinned tabs skipped)', 'info');
-      return;
-    }
-    
+  const handleRestoreSession = async (sessionId: string) => {
+    setLoading("restore");
+    await chrome.runtime.sendMessage({ action: "restoreSession", sessionId });
+    showMessage("Session restored", "info");
+    setLoading(null);
+  };
+
+  const handleDeleteSession = async (sessionId: string) => {
+    if (!confirm("Delete this session?")) return;
     try {
-      await chrome.tabs.remove(tabIds);
-      showMessage(`Closed ${tabIds.length} tabs`, 'success');
+      await chrome.runtime.sendMessage({ action: "deleteSession", sessionId });
+      showMessage("Session deleted", "success");
+      loadSessions();
+    } catch (error) {
+      showMessage("Failed to delete session", "error");
+    }
+  };
+
+  const handleExport = async (format: "json" | "csv" | "markdown") => {
+    const response = await chrome.runtime.sendMessage({
+      action: "exportData",
+      format,
+    });
+    if (response.success) {
+      const blob = new Blob([response.data], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `drop-the-tabs-${new Date().toISOString().slice(0, 10)}.${format === "markdown" ? "md" : format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showMessage(`Exported as ${format.toUpperCase()}`, "success");
+    }
+  };
+
+  const handleCloseAll = async () => {
+    if (confirm("Close all non-pinned tabs?")) {
+      await chrome.runtime.sendMessage({ action: "closeAll" });
       loadCurrentTabs();
-    } catch (error) {
-      showMessage('Failed to close group', 'error');
     }
   };
 
-  const handleSaveGroupAsSession = async (domain: string, groupTabs: TabInfo[]) => {
-    const name = prompt(`Session name for ${domain}:`, `${domain} - ${new Date().toLocaleDateString()}`);
-    if (!name) return;
-
-    try {
-      // Create a session with just these tabs
-      const session = {
-        id: Date.now().toString(),
-        name,
-        createdAt: Date.now(),
-        tabs: groupTabs.map(tab => ({
-          url: tab.url,
-          title: tab.title,
-          favicon: tab.favicon,
-          pinned: tab.pinned,
-        }))
-      };
-
-      const response = await chrome.runtime.sendMessage({ 
-        action: 'saveCustomSession', 
-        session 
-      });
-      
-      if (response.success) {
-        showMessage('Group saved as session', 'success');
-        loadSessions();
-      }
-    } catch (error) {
-      showMessage('Failed to save session', 'error');
-    }
-  };
-
-  const handleGroupDomain = async (domain: string) => {
-    try {
-      const groupTabs = groupedTabs[domain] || [];
-      if (groupTabs.length < 2) {
-        showMessage('Need at least 2 tabs to group', 'info');
-        return;
-      }
-
-      const tabIds = groupTabs.map(t => t.id);
-      const groupId = await chrome.tabs.group({ tabIds });
-      
-      // Set group title to domain
-      await chrome.tabGroups.update(groupId, { 
-        title: domain.slice(0, 15),
-        color: 'blue'
-      });
-      
-      showMessage(`Grouped ${groupTabs.length} tabs`, 'success');
-      loadCurrentTabs();
-    } catch (error) {
-      showMessage('Failed to group tabs', 'error');
-    }
-  };
-
-  // Batch actions
   const toggleTabSelection = (tabId: number) => {
     const newSelected = new Set(selectedTabs);
     if (newSelected.has(tabId)) {
@@ -558,631 +471,742 @@ export default function Popup() {
     setShowBatchActions(newSelected.size > 0);
   };
 
-  const handleCloseSelected = async () => {
-    if (!confirm(`Close ${selectedTabs.size} selected tabs?`)) return;
-    
-    try {
-      await chrome.tabs.remove(Array.from(selectedTabs));
-      showMessage(`Closed ${selectedTabs.size} tabs`, 'success');
-      setSelectedTabs(new Set());
-      setShowBatchActions(false);
-      loadCurrentTabs();
-    } catch (error) {
-      showMessage('Failed to close tabs', 'error');
-    }
-  };
-
-  const handleSaveSelectedAsSession = async () => {
-    const selectedTabList = tabs.filter(t => selectedTabs.has(t.id));
-    const name = prompt('Session name:', `Selected ${selectedTabList.length} tabs`);
-    if (!name) return;
-
-    try {
-      const session = {
-        id: Date.now().toString(),
-        name,
-        createdAt: Date.now(),
-        tabs: selectedTabList.map(tab => ({
-          url: tab.url,
-          title: tab.title,
-          favicon: tab.favicon,
-          pinned: tab.pinned,
-        }))
-      };
-
-      await chrome.runtime.sendMessage({ action: 'saveCustomSession', session });
-      showMessage('Selection saved as session', 'success');
-      setSelectedTabs(new Set());
-      setShowBatchActions(false);
-      loadSessions();
-    } catch (error) {
-      showMessage('Failed to save session', 'error');
-    }
-  };
-
-  // Original actions
-  const handleGroup = async () => {
-    setLoading('group');
-    await chrome.runtime.sendMessage({ action: 'groupTabs' });
-    showMessage('Tabs organized by domain', 'success');
-    setLoading(null);
-    loadCurrentTabs();
-  };
-
-  const handleDeduplicate = async () => {
-    setLoading('dedup');
-    const response = await chrome.runtime.sendMessage({ action: 'deduplicate' });
-    showMessage(`Removed ${response.removed} duplicate tabs`, 'success');
-    setLoading(null);
-    loadCurrentTabs();
-  };
-
-  const handleSaveSession = async () => {
-    const name = prompt('Session name:', `Session ${new Date().toLocaleString()}`);
-    if (name) {
-      setLoading('save');
-      await chrome.runtime.sendMessage({ action: 'saveSession', name });
-      showMessage('Session saved', 'success');
-      setLoading(null);
-      loadSessions();
-    }
-  };
-
-  const handleRestoreSession = async (sessionId: string) => {
-    setLoading('restore');
-    await chrome.runtime.sendMessage({ action: 'restoreSession', sessionId });
-    showMessage('Session restored in new window', 'info');
-    setLoading(null);
-  };
-
-  const handleDeleteSession = async (sessionId: string) => {
-    if (!confirm('Delete this session?')) return;
-    
-    try {
-      await chrome.runtime.sendMessage({ action: 'deleteSession', sessionId });
-      showMessage('Session deleted', 'success');
-      loadSessions();
-    } catch (error) {
-      showMessage('Failed to delete session', 'error');
-    }
-  };
-
-  const handleExport = async (format: 'json' | 'csv' | 'markdown') => {
-    const response = await chrome.runtime.sendMessage({ action: 'exportData', format });
-    if (response.success) {
-      const blob = new Blob([response.data], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `drop-the-tabs-${new Date().toISOString().slice(0, 10)}.${format === 'markdown' ? 'md' : format}`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showMessage(`Exported as ${format.toUpperCase()}`, 'success');
-    }
-  };
-
-  const handleCloseAll = async () => {
-    if (confirm('Close all non-pinned tabs?')) {
-      await chrome.runtime.sendMessage({ action: 'closeAll' });
-      loadCurrentTabs();
-    }
-  };
-
   const totalTabs = filteredTabs.length;
   const totalGroups = Object.keys(groupedTabs).length;
 
   return (
-    <div className="w-[440px] bg-white dark:bg-zinc-950">
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-              <Layers className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <h1 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Drop The Tabs</h1>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">{totalTabs} of {tabs.length} tabs</p>
-            </div>
-          </div>
-          
-          <div className="flex gap-1">
-            <Button
-              onClick={loadCurrentTabs}
-              className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-              aria-label="Refresh"
-            >
-              <RefreshCw className="w-4 h-4 text-zinc-600 dark:text-zinc-400" />
-            </Button>
-            <Button
-              onClick={() => handleExport('csv')}
-              className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-              aria-label="Export"
-            >
-              <Download className="w-4 h-4 text-zinc-600 dark:text-zinc-400" />
-            </Button>
-          </div>
-        </div>
+    <div className="w-[440px] h-[600px] bg-zinc-50 text-zinc-900 font-sans selection:bg-rose-100 selection:text-rose-900 flex flex-col overflow-hidden relative">
+      {/* Load Geist font */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap');
+        .font-sans { font-family: 'Geist', system-ui, sans-serif; }
+        [data-state="inactive"] { display: none !important; }
+      `}</style>
 
-        {/* Search Box */}
-        <div className="relative mb-3">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-          <input
-            type="text"
-            placeholder="Search tabs..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-8 py-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700"
+      {/* Header - Asymmetric Bento Style */}
+      <div className="px-5 pt-5 pb-4 space-y-4 flex-shrink-0">
+        {/* AI Assistant Overlay */}
+        <AnimatePresence>
+          {showAI && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
             >
-              <X className="w-3.5 h-3.5 text-zinc-500" />
-            </button>
+              <GlassCard className="p-4 mb-3">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkle
+                      className="w-4 h-4 text-purple-500"
+                      weight="fill"
+                    />
+                    <span className="text-sm font-semibold text-zinc-900">
+                      AI Assistant
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setShowAI(false)}
+                    className="p-1.5 rounded-lg hover:bg-zinc-100 transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5 text-zinc-400" weight="regular" />
+                  </button>
+                </div>
+                <NaturalLanguageCommand
+                  onCommandExecuted={() => {
+                    loadData();
+                    setShowAI(false);
+                  }}
+                />
+              </GlassCard>
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
 
-        {/* Category Filter */}
-        <div className="mb-3">
-          <CategoryFilter
-            categories={Object.entries(categoryStats).map(([category, count]) => ({
-              category: category as ContentCategory,
-              count
-            }))}
-            selectedCategory={selectedCategory}
-            onSelect={setSelectedCategory}
-          />
-        </div>
+        {/* Export Panel */}
+        <AnimatePresence>
+          {showExport && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="mb-3"
+            >
+              <GlassCard className="p-3">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-purple-50 flex items-center justify-center">
+                      <Export className="w-3.5 h-3.5 text-purple-600" weight="regular" />
+                    </div>
+                    <span className="text-sm font-semibold text-zinc-900">
+                      Export to Obsidian
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setShowExport(false)}
+                    className="p-1.5 rounded-lg hover:bg-zinc-100 transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5 text-zinc-400" weight="regular" />
+                  </button>
+                </div>
+                <ExportPanel
+                  tabs={filteredTabs}
+                  selectedTabIds={selectedTabs}
+                  onExportComplete={() => {
+                    setShowExport(false);
+                    showMessage("Exported to Downloads", "success");
+                  }}
+                />
+              </GlassCard>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {/* Status Filter */}
-        <div className="mb-3">
-          <StatusFilter
-            statusCounts={statusStats}
-            selectedStatus={selectedStatus}
-            onSelect={setSelectedStatus}
-          />
-        </div>
-
-        {/* Search Result Actions */}
-        {searchQuery && filteredTabs.length > 0 && (
-          <div className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-900/20 rounded-lg mb-3">
-            <span className="text-xs text-green-700 dark:text-green-400 font-medium">
-              Found {filteredTabs.length} tabs
-            </span>
-            <div className="flex gap-1.5">
-              <Button
-                onClick={handleSearchGroup}
-                className="flex items-center gap-1 px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
-              >
-                <LayoutGrid className="w-3 h-3" />
-                Group
-              </Button>
-              <Button
-                onClick={handleSearchSave}
-                className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                <Save className="w-3 h-3" />
-                Save
-              </Button>
-              <Button
-                onClick={handleSearchClose}
-                className="flex items-center gap-1 px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
-              >
-                <Trash2 className="w-3 h-3" />
-                Close
-              </Button>
+        {/* Top Row: Title + Live Stats */}
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <motion.div
+              className="w-10 h-10 rounded-2xl bg-zinc-900 flex items-center justify-center shadow-[0_4px_14px_rgba(0,0,0,0.1)]"
+              whileHover={{ rotate: 3 }}
+              transition={{ duration: 0.15 }}
+            >
+              <Stack className="w-5 h-5 text-white" weight="fill" />
+            </motion.div>
+            <div>
+              <h1 className="text-sm font-semibold text-zinc-900 tracking-tight">
+                Drop The Tabs
+              </h1>
+              <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+                <span className="flex items-center gap-1">
+                  <Globe className="w-3 h-3" />
+                  <AnimatedCounter value={totalTabs} />
+                </span>
+                <span className="text-zinc-300">|</span>
+                <span>{totalGroups} groups</span>
+              </div>
             </div>
           </div>
-        )}
 
-        {/* Quick Actions (hidden when searching) */}
-        {!searchQuery && (
-          <div className="flex gap-2">
-            <Button
-              onClick={handleGroup}
-              disabled={loading === 'group'}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg text-xs font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 transition-colors"
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              {loading === 'group' ? 'Grouping...' : 'Auto Group'}
-            </Button>
-            
-            <Button
-              onClick={handleDeduplicate}
-              disabled={loading === 'dedup'}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 rounded-lg text-xs font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 transition-colors"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              {loading === 'dedup' ? 'Cleaning...' : 'Deduplicate'}
-            </Button>
-            
-            <Button
-              onClick={handleSaveSession}
-              disabled={loading === 'save'}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-            >
-              <Save className="w-3.5 h-3.5" />
-              {loading === 'save' ? 'Saving...' : 'Save All'}
-            </Button>
-            
-            <Button
-              onClick={() => setShowExportPanel(!showExportPanel)}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700 transition-colors"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Export
-            </Button>
-          </div>
-        )}
-        
-        {/* Export Panel */}
-        {showExportPanel && (
-          <ExportPanel
-            tabs={filteredTabs}
-            selectedTabIds={selectedTabs}
-            onExportComplete={() => {
-              setShowExportPanel(false);
-              showMessage('Exported to Downloads folder', 'success');
-            }}
-          />
-        )}
-      </div>
-
-      {/* Message */}
-      {message && (
-        <div className={`px-4 py-2 text-xs ${
-          message.type === 'success' 
-            ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' 
-            : message.type === 'error'
-            ? 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'
-            : 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400'
-        }`}>
-          {message.text}
-        </div>
-      )}
-
-      {/* Batch Actions Bar */}
-      {showBatchActions && (
-        <div className="flex items-center justify-between px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800">
-          <span className="text-xs text-blue-700 dark:text-blue-400 font-medium">
-            {selectedTabs.size} tabs selected
-          </span>
-          <div className="flex gap-2">
-            <Button
-              onClick={handleSaveSelectedAsSession}
-              className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              <Save className="w-3 h-3" />
-              Save
-            </Button>
-            <Button
-              onClick={handleCloseSelected}
-              className="flex items-center gap-1 px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
-            >
-              <X className="w-3 h-3" />
-              Close
-            </Button>
-            <Button
-              onClick={() => {
-                setSelectedTabs(new Set());
-                setShowBatchActions(false);
-              }}
-              className="px-2 py-1 text-xs text-zinc-600 hover:text-zinc-900"
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Main Tabs */}
-      <Tabs.Root value={activeTab} onValueChange={setActiveTab}>
-        <Tabs.List className="flex border-b border-zinc-200 dark:border-zinc-800">
-          {[
-            { id: 'current', label: 'Tabs', icon: Globe },
-            { id: 'sessions', label: 'Sessions', icon: Archive },
-            { id: 'stats', label: 'Stats', icon: BarChart3 },
-            { id: 'ai', label: 'AI', icon: Sparkles },
-          ].map((tab) => (
-            <Tabs.Tab
-              key={tab.id}
-              value={tab.id}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px ${
-                activeTab === tab.id
-                  ? 'border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100'
-                  : 'border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300'
+          <div className="flex items-center gap-2">
+            {/* AI Assistant Toggle */}
+            <motion.button
+              onClick={() => setShowAI(!showAI)}
+              whileHover={{ y: -1 }}
+              whileTap={{ y: 1 }}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border transition-colors ${
+                showAI
+                  ? "bg-purple-50 border-purple-200 text-purple-600"
+                  : "bg-white border-zinc-200/60 text-zinc-500 hover:text-purple-600 hover:border-purple-200"
               }`}
             >
-              <tab.icon className="w-3.5 h-3.5" />
-              {tab.label}
-            </Tabs.Tab>
-          ))}
-        </Tabs.List>
+              <Sparkle
+                className="w-3.5 h-3.5"
+                weight={showAI ? "fill" : "regular"}
+              />
+              <span className="text-[10px] font-medium">AI</span>
+            </motion.button>
 
-        <Tabs.Panel value="current" className="p-0">
-          <ScrollArea.Root className="h-[340px]">
-            <ScrollArea.Viewport className="h-full">
-              <div className="p-3 space-y-3">
-                {Object.entries(groupedTabs).map(([domain, domainTabs]) => (
-                  <div 
-                    key={domain} 
-                    className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden bg-zinc-50/50 dark:bg-zinc-900/50 group"
+            {/* Sync Status Indicator */}
+            <motion.div
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border border-zinc-200/60"
+              animate={{
+                boxShadow: syncStatus.connected
+                  ? [
+                      "0 0 0 0 rgba(34,197,94,0)",
+                      "0 0 0 3px rgba(34,197,94,0.08)",
+                      "0 0 0 0 rgba(34,197,94,0)",
+                    ]
+                  : "0 0 0 0 rgba(0,0,0,0)",
+              }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+            >
+              <div
+                className={`w-1.5 h-1.5 rounded-full ${syncStatus.connected ? "bg-green-500" : "bg-zinc-300"}`}
+              />
+              <span className="text-[10px] font-medium text-zinc-500">
+                {syncStatus.connected ? "Synced" : "Offline"}
+              </span>
+            </motion.div>
+          </div>
+        </div>
+
+        {/* Search Bar - Liquid Glass */}
+        <GlassCard className="p-0 overflow-hidden" hover={false}>
+          <div className="relative">
+            <MagnifyingGlass
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400"
+              weight="regular"
+            />
+            <input
+              type="text"
+              placeholder="Search tabs..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-10 py-3 bg-transparent text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none"
+            />
+            <AnimatePresence>
+              {searchQuery && (
+                <motion.button
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-zinc-100 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5 text-zinc-400" weight="regular" />
+                </motion.button>
+              )}
+            </AnimatePresence>
+          </div>
+        </GlassCard>
+
+        {/* Quick Actions - Bento Grid */}
+        <motion.div
+          className="grid grid-cols-4 gap-2"
+          variants={staggerContainer}
+          initial="hidden"
+          animate="show"
+        >
+          <motion.div variants={staggerItem}>
+            <QuickActionButton
+              onClick={handleGroup}
+              className="w-full flex-col gap-1.5 py-3"
+              variant="secondary"
+            >
+              <SquaresFour className="w-4 h-4" weight="regular" />
+              <span>Group</span>
+            </QuickActionButton>
+          </motion.div>
+
+          <motion.div variants={staggerItem}>
+            <QuickActionButton
+              onClick={handleDeduplicate}
+              className="w-full flex-col gap-1.5 py-3"
+              variant="secondary"
+            >
+              <Copy className="w-4 h-4" weight="regular" />
+              <span>Dedup</span>
+            </QuickActionButton>
+          </motion.div>
+
+          <motion.div variants={staggerItem}>
+            <QuickActionButton
+              onClick={handleSaveSession}
+              className="w-full flex-col gap-1.5 py-3"
+              variant="secondary"
+            >
+              <FloppyDisk className="w-4 h-4" weight="regular" />
+              <span>Save</span>
+            </QuickActionButton>
+          </motion.div>
+
+          <motion.div variants={staggerItem}>
+            <QuickActionButton
+              onClick={() => setShowExport(true)}
+              className="w-full flex-col gap-1.5 py-3"
+              variant="secondary"
+            >
+              <Export className="w-4 h-4" weight="regular" />
+              <span>Export</span>
+            </QuickActionButton>
+          </motion.div>
+        </motion.div>
+      </div>
+
+      {/* Message Toast - Fixed at bottom, no layout shift */}
+      <div className="absolute bottom-12 left-0 right-0 pointer-events-none z-50 flex justify-center px-4">
+        <AnimatePresence>
+          {message && (
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.95 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className={`pointer-events-auto px-4 py-2.5 rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] border text-[11px] font-medium backdrop-blur-sm ${
+                message.type === "success"
+                  ? "bg-emerald-500/95 text-white border-emerald-400/50"
+                  : message.type === "error"
+                    ? "bg-rose-500/95 text-white border-rose-400/50"
+                    : "bg-zinc-800/95 text-white border-zinc-700/50"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {message.type === "success" && (
+                  <Check className="w-3.5 h-3.5" weight="bold" />
+                )}
+                {message.type === "error" && (
+                  <X className="w-3.5 h-3.5" weight="bold" />
+                )}
+                {message.text}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* Batch Actions Bar - Fixed overlay */}
+      <AnimatePresence>
+        {showBatchActions && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            className="absolute bottom-14 left-4 right-4 z-40"
+          >
+            <div className="px-4 py-3 bg-zinc-900 text-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.2)] border border-zinc-800">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-medium">
+                  {selectedTabs.size} tabs selected
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectedTabs(new Set());
+                      setShowBatchActions(false);
+                    }}
+                    className="px-3 py-1.5 text-[10px] font-medium text-zinc-400 hover:text-white transition-colors"
                   >
-                    {/* Group Header */}
-                    <div className="flex items-center justify-between px-3 py-2 bg-zinc-100/50 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-800">
-                      <div className="flex items-center gap-2">
-                        <Avatar.Root className="w-5 h-5 rounded bg-white dark:bg-zinc-800 flex items-center justify-center">
-                          <Avatar.Fallback className="text-[8px] font-bold text-zinc-400">
-                            {domain[0].toUpperCase()}
-                          </Avatar.Fallback>
-                        </Avatar.Root>
-                        <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate max-w-[160px]">
-                          {domain}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center gap-1">
-                        <span className="px-1.5 py-0.5 bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400 text-[10px] rounded-full">
-                          {domainTabs.length}
-                        </span>
-                        <GroupActions
-                          domain={domain}
-                          tabs={domainTabs}
-                          onCloseGroup={handleCloseGroup}
-                          onSaveGroup={handleSaveGroupAsSession}
-                          onGroupTabs={handleGroupDomain}
-                        />
-                      </div>
-                    </div>
-                    
-                    {/* Tab List */}
-                    <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                      {domainTabs.map((tab) => (
-                        <div
-                          key={tab.id}
-                          className={`group flex items-center gap-2 px-3 py-2 transition-colors ${
-                            tab.active 
-                              ? 'bg-blue-50 dark:bg-blue-900/20' 
-                              : 'hover:bg-zinc-100 dark:hover:bg-zinc-800'
-                          }`}
-                        >
-                          {/* Checkbox for batch selection */}
-                          <label className="flex items-center cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={selectedTabs.has(tab.id)}
-                              onChange={() => toggleTabSelection(tab.id)}
-                              className="w-3.5 h-3.5 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                          </label>
-                          
-                          {/* Tab Content */}
-                          <div 
-                            className="flex-1 min-w-0 cursor-pointer"
-                            onClick={() => chrome.tabs.update(tab.id, { active: true })}
-                          >
-                            <div className="flex items-center gap-2">
-                              {tab.pinned && <Pin className="w-3 h-3 text-amber-500 flex-shrink-0 fill-amber-500" />}
-                              
-                              <span className={`text-xs truncate ${
-                                tab.active 
-                                  ? 'text-blue-700 dark:text-blue-400 font-medium' 
-                                  : 'text-zinc-700 dark:text-zinc-300'
-                              }`}>
-                                {tab.title || tab.url}
-                              </span>
-                              
-                              {tab.active && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />}
-                            </div>
-                            
-                            {/* Category and Status Badges */}
-                            <div className="flex items-center gap-1.5 mt-1">
-                              <CategoryBadge 
-                                category={tab.category || 'other'} 
-                                onClick={() => {/* TODO: Show category selector */}}
-                              />
-                              <StatusBadge 
-                                status={tab.status || 'unread'}
-                                onClick={() => handleUpdateStatus(tab.id, tab.status === 'unread' ? 'reading' : 'done')}
-                              />
-                              {tab.priority && tab.priority !== 'medium' && (
-                                <PriorityBadge priority={tab.priority} />
-                              )}
-                            </div>
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleCloseAll}
+                    className="px-3 py-1.5 text-[10px] font-medium bg-rose-500 hover:bg-rose-600 rounded-xl transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Main Content Tabs */}
+      <Tabs.Root
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="flex-1 flex flex-col min-h-0"
+        style={{ height: "calc(100% - 180px)" }}
+      >
+        <div className="px-5 flex-shrink-0">
+          <Tabs.List className="flex p-1 bg-zinc-200/60 rounded-2xl">
+            {[
+              { id: "current", label: "Tabs", icon: Globe },
+              { id: "sessions", label: "Sessions", icon: Archive },
+              { id: "stats", label: "Stats", icon: ChartBar },
+            ].map((tab) => (
+              <Tabs.Tab
+                key={tab.id}
+                value={tab.id}
+                className="relative flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-medium transition-colors rounded-xl"
+              >
+                {activeTab === tab.id && (
+                  <motion.div
+                    layoutId="activeTab"
+                    className="absolute inset-0 bg-white rounded-xl shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+                    transition={springConfig}
+                  />
+                )}
+                <span
+                  className={`relative z-10 flex items-center gap-1.5 ${
+                    activeTab === tab.id ? "text-zinc-900" : "text-zinc-500"
+                  }`}
+                >
+                  <tab.icon
+                    className="w-3.5 h-3.5"
+                    weight={activeTab === tab.id ? "fill" : "regular"}
+                  />
+                  {tab.label}
+                </span>
+              </Tabs.Tab>
+            ))}
+          </Tabs.List>
+        </div>
+
+        {/* Tabs Panel */}
+        <Tabs.Panel
+          value="current"
+          className="flex-1 flex flex-col min-h-0 p-0 mt-3"
+          style={{
+            display: activeTab === "current" ? "flex" : "none",
+            height: "100%",
+          }}
+        >
+          <ScrollArea.Root className="flex-1" style={{ minHeight: 0 }}>
+            <ScrollArea.Viewport className="h-full px-5 pb-5">
+              <motion.div
+                className="space-y-3"
+                variants={staggerContainer}
+                initial="hidden"
+                animate="show"
+              >
+                {Object.entries(groupedTabs).map(
+                  ([domain, domainTabs], groupIndex) => (
+                    <motion.div key={domain} variants={staggerItem} layout>
+                      <GlassCard className="overflow-hidden">
+                        {/* Group Header */}
+                        <div className="flex items-center justify-between px-4 py-3 bg-zinc-50/50 border-b border-zinc-100">
+                          <div className="flex items-center gap-2.5">
+                            <Avatar.Root className="w-6 h-6 rounded-lg bg-white border border-zinc-200 flex items-center justify-center">
+                              <Avatar.Fallback className="text-[9px] font-bold text-zinc-400 uppercase">
+                                {domain[0]}
+                              </Avatar.Fallback>
+                            </Avatar.Root>
+                            <span className="text-xs font-medium text-zinc-700 truncate max-w-[140px]">
+                              {domain}
+                            </span>
                           </div>
-                          
-                          {/* Tab Actions */}
-                          <div className="flex items-center gap-1">
-                            <TabQuickActions
-                              tabId={tab.id}
-                              currentStatus={tab.status || 'unread'}
-                              currentPriority={tab.priority || 'medium'}
-                              onStatusChange={(status) => handleUpdateStatus(tab.id, status)}
-                              onPriorityChange={(priority) => handleUpdatePriority(tab.id, priority)}
-                              onAddNote={() => handleAddNote(tab.id)}
-                              onExport={() => {/* TODO: Export single tab */}}
-                            />
-                            <TabActions
-                              tab={tab}
-                              onClose={handleCloseTab}
-                              onPin={handlePinTab}
-                              onDuplicate={handleDuplicateTab}
-                            />
+
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 bg-zinc-200/60 text-zinc-600 text-[10px] font-medium rounded-full transition-colors hover:bg-zinc-300/60">
+                              {domainTabs.length}
+                            </span>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+
+                        {/* Tab List */}
+                        <div className="divide-y divide-zinc-100/50">
+                          {domainTabs.map((tab, tabIndex) => (
+                            <motion.div
+                              key={tab.id}
+                              className={`group flex items-center gap-2.5 px-4 py-2.5 transition-colors ${
+                                tab.active
+                                  ? "bg-rose-50/30"
+                                  : "hover:bg-zinc-50/50"
+                              }`}
+                              initial={{ opacity: 0, x: -8 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{
+                                delay: tabIndex * 0.02,
+                                duration: 0.15,
+                                ease: [0.16, 1, 0.3, 1],
+                              }}
+                            >
+                              <label className="flex items-center cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedTabs.has(tab.id)}
+                                  onChange={() => toggleTabSelection(tab.id)}
+                                  className="w-3.5 h-3.5 rounded border-zinc-300 text-rose-500 focus:ring-rose-500/20"
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              </label>
+
+                              <div
+                                className="flex-1 flex items-center gap-2 min-w-0 cursor-pointer"
+                                onClick={() =>
+                                  chrome.tabs.update(tab.id, { active: true })
+                                }
+                              >
+                                {tab.pinned && (
+                                  <PushPin
+                                    className="w-3 h-3 text-amber-400 flex-shrink-0 fill-amber-400"
+                                    weight="fill"
+                                  />
+                                )}
+
+                                <span
+                                  className={`flex-1 text-[11px] truncate ${
+                                    tab.active
+                                      ? "text-rose-600 font-medium"
+                                      : "text-zinc-700"
+                                  }`}
+                                >
+                                  {tab.title || tab.url}
+                                </span>
+
+                                {tab.active && (
+                                  <motion.div
+                                    className="w-1.5 h-1.5 rounded-full bg-rose-500 flex-shrink-0"
+                                    animate={{ scale: [1, 1.2, 1] }}
+                                    transition={{
+                                      duration: 2,
+                                      repeat: Infinity,
+                                    }}
+                                  />
+                                )}
+                              </div>
+
+                              <TabActions
+                                tab={tab}
+                                onClose={handleCloseTab}
+                                onPin={handlePinTab}
+                                onDuplicate={handleDuplicateTab}
+                              />
+                            </motion.div>
+                          ))}
+                        </div>
+                      </GlassCard>
+                    </motion.div>
+                  ),
+                )}
+              </motion.div>
             </ScrollArea.Viewport>
-            <ScrollArea.Scrollbar className="w-1.5 bg-zinc-100 dark:bg-zinc-900 rounded-full">
-              <ScrollArea.Thumb className="bg-zinc-300 dark:bg-zinc-700 rounded-full" />
+            <ScrollArea.Scrollbar className="w-1.5 bg-transparent rounded-full p-px">
+              <ScrollArea.Thumb className="bg-zinc-300/50 hover:bg-zinc-400/50 rounded-full transition-colors" />
             </ScrollArea.Scrollbar>
           </ScrollArea.Root>
         </Tabs.Panel>
 
-        <Tabs.Panel value="sessions" className="p-3">
-          <div className="space-y-3">
-            <Button
-              onClick={handleSaveSession}
-              disabled={loading === 'save'}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg text-sm font-medium hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 transition-colors"
-            >
-              <Save className="w-4 h-4" />
-              Save Current Session
-            </Button>
+        {/* Sessions Panel */}
+        <Tabs.Panel
+          value="sessions"
+          className="flex-1 flex flex-col min-h-0 p-0 mt-3"
+          style={{
+            display: activeTab === "sessions" ? "flex" : "none",
+            height: "100%",
+          }}
+        >
+          <div
+            className="px-5 pb-0 flex-1 flex flex-col"
+            style={{ minHeight: 0 }}
+          >
+            <GlassCard className="p-3 mb-3">
+              <QuickActionButton
+                onClick={handleSaveSession}
+                className="w-full"
+                variant="primary"
+              >
+                <Plus className="w-4 h-4" weight="regular" />
+                Save Current Session
+              </QuickActionButton>
+            </GlassCard>
 
-            <Separator className="h-px bg-zinc-200 dark:bg-zinc-800" />
-
-            {sessions.length === 0 ? (
-              <div className="text-center py-8">
-                <Archive className="w-10 h-10 text-zinc-300 dark:text-zinc-700 mx-auto mb-2" />
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">No saved sessions</p>
-                <p className="text-xs text-zinc-400 mt-1">Save your current tabs to restore later</p>
-              </div>
-            ) : (
-              <ScrollArea.Root className="h-[260px]">
-                <ScrollArea.Viewport className="h-full">
-                  <div className="space-y-2">
-                    {sessions.map((session) => (
-                      <div 
-                        key={session.id} 
-                        className="flex items-center gap-3 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors bg-white dark:bg-zinc-900"
-                      >
-                        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleRestoreSession(session.id)}>
-                          <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
-                            {session.name}
-                          </h3>
-                          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                            {new Date(session.createdAt).toLocaleDateString()} • {session.tabs.length} tabs
-                          </p>
-                        </div>
-                        
-                        <div className="flex items-center gap-1">
-                          <Button
-                            onClick={() => handleRestoreSession(session.id)}
-                            disabled={loading === 'restore'}
-                            className="flex items-center gap-1 px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg text-xs font-medium hover:bg-green-200 dark:hover:bg-green-900/50 disabled:opacity-50 transition-colors"
-                          >
-                            <ChevronRight className="w-3 h-3" />
-                            Restore
-                          </Button>
-                          
-                          <Button
-                            onClick={() => handleDeleteSession(session.id)}
-                            className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
+            <ScrollArea.Root className="flex-1 min-h-0">
+              <ScrollArea.Viewport className="h-full">
+                <motion.div
+                  className="space-y-2"
+                  variants={staggerContainer}
+                  initial="hidden"
+                  animate="show"
+                >
+                  {sessions.length === 0 ? (
+                    <motion.div
+                      variants={staggerItem}
+                      className="text-center py-12"
+                    >
+                      <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-zinc-100 flex items-center justify-center">
+                        <Archive
+                          className="w-8 h-8 text-zinc-300"
+                          weight="regular"
+                        />
                       </div>
-                    ))}
-                  </div>
-                </ScrollArea.Viewport>
-              </ScrollArea.Root>
-            )}
+                      <p className="text-sm font-medium text-zinc-600">
+                        No saved sessions
+                      </p>
+                      <p className="text-[11px] text-zinc-400 mt-1">
+                        Save your current tabs to restore later
+                      </p>
+                    </motion.div>
+                  ) : (
+                    sessions.map((session, index) => (
+                      <motion.div
+                        key={session.id}
+                        variants={staggerItem}
+                        layout
+                      >
+                        <GlassCard className="p-3 hover:border-rose-200/50 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="flex-1 min-w-0 cursor-pointer"
+                              onClick={() => handleRestoreSession(session.id)}
+                            >
+                              <h3 className="text-xs font-semibold text-zinc-900 truncate">
+                                {session.name}
+                              </h3>
+                              <p className="text-[10px] text-zinc-500 mt-0.5">
+                                {new Date(
+                                  session.createdAt,
+                                ).toLocaleDateString()}{" "}
+                                · {session.tabs.length} tabs
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              <motion.button
+                                onClick={() => handleRestoreSession(session.id)}
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                className="flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-xl text-[10px] font-medium hover:bg-emerald-100 transition-colors"
+                              >
+                                <CaretRight className="w-3 h-3" weight="fill" />
+                                Restore
+                              </motion.button>
+
+                              <motion.button
+                                onClick={() => handleDeleteSession(session.id)}
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                className="p-1.5 text-zinc-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
+                              >
+                                <Trash
+                                  className="w-3.5 h-3.5"
+                                  weight="regular"
+                                />
+                              </motion.button>
+                            </div>
+                          </div>
+                        </GlassCard>
+                      </motion.div>
+                    ))
+                  )}
+                </motion.div>
+              </ScrollArea.Viewport>
+              <ScrollArea.Scrollbar className="w-1.5 bg-transparent rounded-full p-px">
+                <ScrollArea.Thumb className="bg-zinc-300/50 hover:bg-zinc-400/50 rounded-full transition-colors" />
+              </ScrollArea.Scrollbar>
+            </ScrollArea.Root>
           </div>
         </Tabs.Panel>
 
-        <Tabs.Panel value="stats" className="p-3">
-          <div className="space-y-4">
-            <div className="p-4 rounded-xl bg-gradient-to-br from-purple-500/10 to-pink-500/10 dark:from-purple-500/20 dark:to-pink-500/20 border border-purple-200/50 dark:border-purple-800/50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                </div>
-                <div>
-                  <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">Today's Activity</p>
-                  <p className="text-2xl font-bold text-purple-900 dark:text-purple-100">
-                    {stats.tabStats.length > 0 
-                      ? formatDuration(stats.tabStats.reduce((acc, s) => acc + s.totalTime, 0))
-                      : '0m'}
-                  </p>
-                </div>
-              </div>
-            </div>
+        {/* Stats Panel */}
+        <Tabs.Panel
+          value="stats"
+          className="flex-1 flex flex-col min-h-0 p-0 mt-3 overflow-hidden"
+          style={{
+            display: activeTab === "stats" ? "flex" : "none",
+            height: "100%",
+          }}
+        >
+          <ScrollArea.Root className="flex-1" style={{ minHeight: 0 }}>
+            <ScrollArea.Viewport className="h-full">
+              <div className="px-5 pb-5 space-y-4">
+                {/* Activity Card */}
+                <GlassCard className="p-5 bg-gradient-to-br from-rose-500/5 to-orange-500/5 border-rose-100/50">
+                  <div className="flex items-center gap-4">
+                    <motion.div
+                      className="w-12 h-12 rounded-2xl bg-rose-500/10 flex items-center justify-center"
+                      animate={{ rotate: [0, 3, -3, 0] }}
+                      transition={{
+                        duration: 3,
+                        repeat: Infinity,
+                        repeatDelay: 1.5,
+                      }}
+                    >
+                      <Clock
+                        className="w-6 h-6 text-rose-500"
+                        weight="regular"
+                      />
+                    </motion.div>
+                    <div>
+                      <p className="text-[10px] font-medium text-rose-600/80 uppercase tracking-wider">
+                        Today's Activity
+                      </p>
+                      <p className="text-2xl font-bold text-zinc-900 tracking-tight">
+                        {stats.tabStats.length > 0
+                          ? formatDuration(
+                              stats.tabStats.reduce(
+                                (acc, s) => acc + s.totalTime,
+                                0,
+                              ),
+                            )
+                          : "0m"}
+                      </p>
+                    </div>
+                  </div>
+                </GlassCard>
 
-            <div>
-              <h3 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-3">Top Domains</h3>
-              
-              {stats.tabStats.length === 0 ? (
-                <div className="text-center py-6">
-                  <BarChart3 className="w-10 h-10 text-zinc-300 dark:text-zinc-700 mx-auto mb-2" />
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">No stats yet</p>
-                  <p className="text-xs text-zinc-400 mt-1">Browse to start tracking</p>
-                </div>
-              ) : (
-                <ScrollArea.Root className="h-[200px]">
-                  <ScrollArea.Viewport className="h-full">
-                    <div className="space-y-2">
-                      {stats.tabStats.slice(0, 10).map((stat, i) => {
-                        const maxTime = Math.max(...stats.tabStats.map(s => s.totalTime));
+                {/* Top Domains */}
+                <div>
+                  <h3 className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider mb-3 px-1">
+                    Top Domains
+                  </h3>
+
+                  {stats.tabStats.length === 0 ? (
+                    <GlassCard className="p-8 text-center">
+                      <ChartBar
+                        className="w-10 h-10 text-zinc-200 mx-auto mb-2"
+                        weight="regular"
+                      />
+                      <p className="text-sm text-zinc-500">No stats yet</p>
+                      <p className="text-[11px] text-zinc-400 mt-1">
+                        Browse to start tracking
+                      </p>
+                    </GlassCard>
+                  ) : (
+                    <motion.div
+                      className="space-y-2"
+                      variants={staggerContainer}
+                      initial="hidden"
+                      animate="show"
+                    >
+                      {stats.tabStats.slice(0, 8).map((stat, i) => {
+                        const maxTime = Math.max(
+                          ...stats.tabStats.map((s) => s.totalTime),
+                        );
                         const percentage = (stat.totalTime / maxTime) * 100;
-                        
+
                         return (
-                          <div key={stat.domain} className="flex items-center gap-3">
-                            <span className="w-5 text-xs font-medium text-zinc-400">#{i + 1}</span>
+                          <motion.div
+                            key={stat.domain}
+                            variants={staggerItem}
+                            className="flex items-center gap-3"
+                          >
+                            <span className="w-4 text-[10px] font-medium text-zinc-400 tabular-nums">
+                              {i + 1}
+                            </span>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate">
+                                <span className="text-[11px] font-medium text-zinc-700 truncate">
                                   {stat.domain}
                                 </span>
-                                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                                <span className="text-[10px] text-zinc-500 tabular-nums">
                                   {formatDuration(stat.totalTime)}
                                 </span>
                               </div>
-                              <div className="h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                                <div 
-                                  className="h-full bg-purple-500 rounded-full transition-all"
-                                  style={{ width: `${percentage}%` }}
+                              <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+                                <motion.div
+                                  className="h-full bg-gradient-to-r from-rose-400 to-rose-500 rounded-full"
+                                  initial={{ width: 0 }}
+                                  animate={{ width: `${percentage}%` }}
+                                  transition={{
+                                    duration: 0.4,
+                                    delay: i * 0.03,
+                                    ease: [0.16, 1, 0.3, 1],
+                                  }}
                                 />
                               </div>
                             </div>
-                          </div>
+                          </motion.div>
                         );
                       })}
-                    </div>
-                  </ScrollArea.Viewport>
-                </ScrollArea.Root>
-              )}
-            </div>
-          </div>
-        </Tabs.Panel>
-
-        {/* AI Command Panel */}
-        <Tabs.Panel value="ai" className="p-3">
-          <NaturalLanguageCommand 
-            onCommandExecuted={() => {
-              loadCurrentTabs();
-              loadStatsData();
-            }}
-          />
+                    </motion.div>
+                  )}
+                </div>
+              </div>
+            </ScrollArea.Viewport>
+            <ScrollArea.Scrollbar className="w-1.5 bg-transparent rounded-full p-px">
+              <ScrollArea.Thumb className="bg-zinc-300/50 hover:bg-zinc-400/50 rounded-full transition-colors" />
+            </ScrollArea.Scrollbar>
+          </ScrollArea.Root>
         </Tabs.Panel>
       </Tabs.Root>
 
-      {/* Footer */}
-      <div className="flex items-center justify-between px-4 py-2 border-t border-zinc-200 dark:border-zinc-800 text-[10px] text-zinc-400 dark:text-zinc-600">
-        <div className="flex items-center gap-2">
-          <span>Drop The Tabs v0.1.0</span>
-          <div className="flex items-center gap-1 ml-2">
-            <div className={`w-2 h-2 rounded-full ${syncStatus.connected ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span>{syncStatus.connected ? 'Synced' : 'Not synced'}</span>
-            {syncStatus.connected && (
-              <span className="text-zinc-300 dark:text-zinc-700">| {syncStatus.deviceId?.slice(0, 8)}...</span>
-            )}
+      {/* Footer - Fixed at bottom */}
+      <div
+        className="px-5 py-3 border-t border-zinc-200/60 bg-white/50 flex-shrink-0"
+        style={{ height: "48px" }}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-[10px] text-zinc-400">
+            <span className="font-medium">Drop The Tabs</span>
+            <span className="text-zinc-300">|</span>
+            <span>v0.2.0</span>
           </div>
+
+          <motion.button
+            onClick={handleCloseAll}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-medium text-rose-500 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+          >
+            <Minus className="w-3 h-3" weight="regular" />
+            Close All
+          </motion.button>
         </div>
-        <Button
-          onClick={handleCloseAll}
-          className="flex items-center gap-1 text-red-500 hover:text-red-600 transition-colors"
-        >
-          <Trash2 className="w-3 h-3" />
-          Close All
-        </Button>
       </div>
     </div>
   );
