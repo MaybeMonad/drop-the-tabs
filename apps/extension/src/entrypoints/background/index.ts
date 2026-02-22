@@ -56,7 +56,7 @@ export default defineBackground(() => {
   // Sync tabs if connected
   async function syncIfConnected(): Promise<void> {
     if (!syncService.isConnected()) return;
-    
+
     try {
       const tabs = await chrome.tabs.query({ currentWindow: true });
       const tabData = tabs.map(tab => ({
@@ -71,7 +71,7 @@ export default defineBackground(() => {
         deviceId: syncService.getDeviceId(),
         lastModified: Date.now(),
       }));
-      
+
       await syncService.syncTabs(tabData);
     } catch (error) {
       console.error('[DTT] Sync error:', error);
@@ -104,7 +104,7 @@ export default defineBackground(() => {
             const tabs = await tabManager.getAllTabs();
             sendResponse({ success: true, data: tabs });
             break;
-            
+
           case 'getSyncStatus':
             sendResponse({
               success: true,
@@ -113,17 +113,17 @@ export default defineBackground(() => {
               userId: syncService.getUserId(),
             });
             break;
-            
+
           case 'groupTabs':
             await tabManager.autoGroupTabs();
             sendResponse({ success: true });
             break;
-            
+
           case 'deduplicate':
             const removed = await tabManager.deduplicateTabs();
             sendResponse({ success: true, removed });
             break;
-            
+
           case 'saveSession':
             const sessionId = await tabManager.saveSession(request.name);
             // Also sync to Firebase if connected
@@ -136,7 +136,7 @@ export default defineBackground(() => {
             }
             sendResponse({ success: true, sessionId });
             break;
-            
+
           case 'getSessions':
             let localSessions = await tabManager.getSessions();
             // Also try to get from Firebase
@@ -158,7 +158,7 @@ export default defineBackground(() => {
             }
             sendResponse({ success: true, data: localSessions });
             break;
-            
+
           case 'saveCustomSession':
             await tabManager.saveCustomSession(request.session);
             // Also sync to Firebase
@@ -167,7 +167,7 @@ export default defineBackground(() => {
             }
             sendResponse({ success: true });
             break;
-            
+
           case 'deleteSession':
             await tabManager.deleteSession(request.sessionId);
             // Also delete from Firebase
@@ -176,17 +176,79 @@ export default defineBackground(() => {
             }
             sendResponse({ success: true });
             break;
-            
+
           case 'restoreSession':
             await tabManager.restoreSession(request.sessionId);
             sendResponse({ success: true });
             break;
-            
+
           case 'getStats':
             const stats = await statsCollector.getStats();
             sendResponse({ success: true, data: stats });
             break;
-            
+
+          // Categorized Tabs (Phase 1)
+          case 'getCategorizedTabs':
+            const { mergeWithMetadata } = await import('@/services/tabMetadata');
+            const allTabs = await chrome.tabs.query({ currentWindow: true });
+            const categorized = await mergeWithMetadata(allTabs);
+            sendResponse({ success: true, data: categorized });
+            break;
+
+          case 'updateTabCategory':
+            const { saveTabMetadata } = await import('@/services/tabMetadata');
+            await saveTabMetadata(request.tabId, { category: request.category });
+            sendResponse({ success: true });
+            break;
+
+          case 'updateTabStatus':
+            const { saveTabMetadata: saveStatus } = await import('@/services/tabMetadata');
+            await saveStatus(request.tabId, { status: request.status });
+            sendResponse({ success: true });
+            break;
+
+          case 'updateTabPriority':
+            const { saveTabMetadata: savePriority } = await import('@/services/tabMetadata');
+            await savePriority(request.tabId, { priority: request.priority });
+            sendResponse({ success: true });
+            break;
+
+          case 'updateTabNotes':
+            const { saveTabMetadata: saveNotes } = await import('@/services/tabMetadata');
+            await saveNotes(request.tabId, { notes: request.notes });
+            sendResponse({ success: true });
+            break;
+
+          case 'addTabTag':
+            const { getTabMetadata, saveTabMetadata: saveTag } = await import('@/services/tabMetadata');
+            const meta = await getTabMetadata(request.tabId);
+            const currentTags = meta?.tags || [];
+            if (!currentTags.includes(request.tag)) {
+              await saveTag(request.tabId, { tags: [...currentTags, request.tag] });
+            }
+            sendResponse({ success: true });
+            break;
+
+          case 'removeTabTag':
+            const { getTabMetadata: getTagMeta, saveTabMetadata: saveRemoveTag } = await import('@/services/tabMetadata');
+            const tagMeta = await getTagMeta(request.tabId);
+            const tags = (tagMeta?.tags || []).filter((t: string) => t !== request.tag);
+            await saveRemoveTag(request.tabId, { tags });
+            sendResponse({ success: true });
+            break;
+
+          case 'getCategoryStats':
+            const { getCategoryStats: getCatStats } = await import('@/services/tabMetadata');
+            const catStats = await getCatStats();
+            sendResponse({ success: true, data: catStats });
+            break;
+
+          case 'getStatusStats':
+            const { getStatusStats } = await import('@/services/tabMetadata');
+            const statusStats = await getStatusStats();
+            sendResponse({ success: true, data: statusStats });
+            break;
+
           default:
             sendResponse({ success: false, error: 'Unknown action' });
         }
@@ -195,7 +257,7 @@ export default defineBackground(() => {
         sendResponse({ success: false, error: String(error) });
       }
     })();
-    
+
     return true;
   });
 });
