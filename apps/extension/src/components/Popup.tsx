@@ -29,9 +29,22 @@ import {
   Archive,
   RefreshCw,
   Check,
+  Tag,
 } from 'lucide-react';
 import type { TabInfo, Session, TabStats } from '../utils/types';
 import '../style.css';
+
+// Import categorization components
+import {
+  CategoryBadge,
+  StatusBadge,
+  PriorityBadge,
+  CategoryFilter,
+  StatusFilter,
+  TabQuickActions,
+} from './CategoryUI';
+import type { ContentCategory, TabStatus, TabPriority, CategorizedTab } from '../utils/contentCategory';
+import { CATEGORY_META, STATUS_META, PRIORITY_META, categorizeTab, detectCategory } from '../utils/contentCategory';
 
 interface TabGroup {
   [key: string]: TabInfo[];
@@ -174,7 +187,7 @@ function GroupActions({ domain, tabs, onCloseGroup, onSaveGroup, onGroupTabs }: 
 
 export default function Popup() {
   const [activeTab, setActiveTab] = useState('current');
-  const [tabs, setTabs] = useState<TabInfo[]>([]);
+  const [tabs, setTabs] = useState<CategorizedTab[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [stats, setStats] = useState<{ tabStats: TabStats[]; dailyStats: any[] }>({ tabStats: [], dailyStats: [] });
   const [loading, setLoading] = useState<string | null>(null);
@@ -182,8 +195,12 @@ export default function Popup() {
   const [selectedTabs, setSelectedTabs] = useState<Set<number>>(new Set());
   const [showBatchActions, setShowBatchActions] = useState(false);
 
-  // Search state
+  // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<ContentCategory | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<TabStatus | null>(null);
+  const [categoryStats, setCategoryStats] = useState<Record<string, number>>({});
+  const [statusStats, setStatusStats] = useState<Record<string, number>>({});
 
   // Sync status
   const [syncStatus, setSyncStatus] = useState({
@@ -215,15 +232,25 @@ export default function Popup() {
   };
 
   const loadData = async () => {
-    await Promise.all([loadCurrentTabs(), loadSessions(), loadStats()]);
+    await Promise.all([loadCurrentTabs(), loadSessions(), loadStats(), loadStatsData()]);
   };
 
   const loadCurrentTabs = async () => {
-    const response = await chrome.runtime.sendMessage({ action: 'getTabs' });
+    const response = await chrome.runtime.sendMessage({ action: 'getCategorizedTabs' });
     if (response.success) {
       setTabs(response.data);
-      setSelectedTabs(new Set()); // Clear selection on refresh
+      setSelectedTabs(new Set());
     }
+  };
+
+  const loadStatsData = async () => {
+    const [catResponse, statusResponse] = await Promise.all([
+      chrome.runtime.sendMessage({ action: 'getCategoryStats' }),
+      chrome.runtime.sendMessage({ action: 'getStatusStats' }),
+    ]);
+    if (catResponse.success) setCategoryStats(catResponse.data);
+    if (statusResponse.success) setStatusStats(statusResponse.data);
+  };
   };
 
   const loadSessions = async () => {
@@ -241,31 +268,106 @@ export default function Popup() {
     setTimeout(() => setMessage(null), 3000);
   };
 
-  // Filter tabs based on search
+  // Filter tabs based on search, category, and status
   const filteredTabs = useMemo(() => {
-    if (!searchQuery.trim()) return tabs;
-    
-    const query = searchQuery.toLowerCase();
-    return tabs.filter(tab => 
-      tab.title?.toLowerCase().includes(query) ||
-      tab.url?.toLowerCase().includes(query)
-    );
-  }, [tabs, searchQuery]);
-
-  // Group filtered tabs by domain
-  const groupedTabs = useMemo(() => {
-    return filteredTabs.reduce((acc, tab) => {
-      try {
-        const domain = new URL(tab.url).hostname.replace(/^www\./, '') || 'Other';
-        if (!acc[domain]) acc[domain] = [];
-        acc[domain].push(tab);
-      } catch {
-        if (!acc['Other']) acc['Other'] = [];
-        acc['Other'].push(tab);
+    return tabs.filter(tab => {
+      // Search filter
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const matchesSearch = tab.title?.toLowerCase().includes(query) ||
+                             tab.url?.toLowerCase().includes(query);
+        if (!matchesSearch) return false;
       }
-      return acc;
-    }, {} as Record<string, TabInfo[]>);
-  }, [filteredTabs]);
+      
+      // Category filter
+      if (selectedCategory && tab.category !== selectedCategory) {
+        return false;
+      }
+      
+      // Status filter
+      if (selectedStatus && tab.status !== selectedStatus) {
+        return false;
+      }
+      
+      return true;
+    });
+  }, [tabs, searchQuery, selectedCategory, selectedStatus]);
+
+  // Group filtered tabs by category (new) or domain
+  const groupedTabs = useMemo(() => {
+    // If filtering by category, group by domain within category
+    // Otherwise group by category first
+    if (selectedCategory) {
+      return filteredTabs.reduce((acc, tab) => {
+        try {
+          const domain = new URL(tab.url).hostname.replace(/^www\./, '') || 'Other';
+          if (!acc[domain]) acc[domain] = [];
+          acc[domain].push(tab);
+        } catch {
+          if (!acc['Other']) acc['Other'] = [];
+          acc['Other'].push(tab);
+        }
+        return acc;
+      }, {} as Record<string, CategorizedTab[]>);
+    } else {
+      // Group by category
+      return filteredTabs.reduce((acc, tab) => {
+        const category = tab.category || 'other';
+        if (!acc[category]) acc[category] = [];
+        acc[category].push(tab);
+        return acc;
+      }, {} as Record<string, CategorizedTab[]>);
+    }
+  }, [filteredTabs, selectedCategory]);
+
+  // Tab categorization handlers
+  const handleUpdateCategory = async (tabId: number, category: ContentCategory) => {
+    try {
+      await chrome.runtime.sendMessage({ action: 'updateTabCategory', tabId, category });
+      loadCurrentTabs();
+      loadStatsData();
+      showMessage('Category updated', 'success');
+    } catch (error) {
+      showMessage('Failed to update category', 'error');
+    }
+  };
+
+  const handleUpdateStatus = async (tabId: number, status: TabStatus) => {
+    try {
+      await chrome.runtime.sendMessage({ action: 'updateTabStatus', tabId, status });
+      loadCurrentTabs();
+      loadStatsData();
+      showMessage(`Marked as ${STATUS_META[status].label}`, 'success');
+    } catch (error) {
+      showMessage('Failed to update status', 'error');
+    }
+  };
+
+  const handleUpdatePriority = async (tabId: number, priority: TabPriority) => {
+    try {
+      await chrome.runtime.sendMessage({ action: 'updateTabPriority', tabId, priority });
+      loadCurrentTabs();
+      showMessage(`Priority set to ${PRIORITY_META[priority].label}`, 'success');
+    } catch (error) {
+      showMessage('Failed to update priority', 'error');
+    }
+  };
+
+  const handleAddNote = async (tabId: number) => {
+    const tab = tabs.find(t => t.id === tabId);
+    if (!tab) return;
+    
+    const note = prompt('Add a note:', tab.notes || '');
+    if (note === null) return; // Cancelled
+    
+    try {
+      await chrome.runtime.sendMessage({ action: 'updateTabNotes', tabId, notes: note });
+      loadCurrentTabs();
+      showMessage('Note saved', 'success');
+    } catch (error) {
+      showMessage('Failed to save note', 'error');
+    }
+  };
 
   // Search result actions
   const handleSearchGroup = async () => {
@@ -618,6 +720,27 @@ export default function Popup() {
           )}
         </div>
 
+        {/* Category Filter */}
+        <div className="mb-3">
+          <CategoryFilter
+            categories={Object.entries(categoryStats).map(([category, count]) => ({
+              category: category as ContentCategory,
+              count
+            }))}
+            selectedCategory={selectedCategory}
+            onSelect={setSelectedCategory}
+          />
+        </div>
+
+        {/* Status Filter */}
+        <div className="mb-3">
+          <StatusFilter
+            statusCounts={statusStats}
+            selectedStatus={selectedStatus}
+            onSelect={setSelectedStatus}
+          />
+        </div>
+
         {/* Search Result Actions */}
         {searchQuery && filteredTabs.length > 0 && (
           <div className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-900/20 rounded-lg mb-3">
@@ -813,29 +936,57 @@ export default function Popup() {
                           
                           {/* Tab Content */}
                           <div 
-                            className="flex-1 flex items-center gap-2 min-w-0 cursor-pointer"
+                            className="flex-1 min-w-0 cursor-pointer"
                             onClick={() => chrome.tabs.update(tab.id, { active: true })}
                           >
-                            {tab.pinned && <Pin className="w-3 h-3 text-amber-500 flex-shrink-0 fill-amber-500" />}
+                            <div className="flex items-center gap-2">
+                              {tab.pinned && <Pin className="w-3 h-3 text-amber-500 flex-shrink-0 fill-amber-500" />}
+                              
+                              <span className={`text-xs truncate ${
+                                tab.active 
+                                  ? 'text-blue-700 dark:text-blue-400 font-medium' 
+                                  : 'text-zinc-700 dark:text-zinc-300'
+                              }`}>
+                                {tab.title || tab.url}
+                              </span>
+                              
+                              {tab.active && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />}
+                            </div>
                             
-                            <span className={`flex-1 text-xs truncate ${
-                              tab.active 
-                                ? 'text-blue-700 dark:text-blue-400 font-medium' 
-                                : 'text-zinc-700 dark:text-zinc-300'
-                            }`}>
-                              {tab.title || tab.url}
-                            </span>
-                            
-                            {tab.active && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />}
+                            {/* Category and Status Badges */}
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <CategoryBadge 
+                                category={tab.category || 'other'} 
+                                onClick={() => {/* TODO: Show category selector */}}
+                              />
+                              <StatusBadge 
+                                status={tab.status || 'unread'}
+                                onClick={() => handleUpdateStatus(tab.id, tab.status === 'unread' ? 'reading' : 'done')}
+                              />
+                              {tab.priority && tab.priority !== 'medium' && (
+                                <PriorityBadge priority={tab.priority} />
+                              )}
+                            </div>
                           </div>
                           
                           {/* Tab Actions */}
-                          <TabActions
-                            tab={tab}
-                            onClose={handleCloseTab}
-                            onPin={handlePinTab}
-                            onDuplicate={handleDuplicateTab}
-                          />
+                          <div className="flex items-center gap-1">
+                            <TabQuickActions
+                              tabId={tab.id}
+                              currentStatus={tab.status || 'unread'}
+                              currentPriority={tab.priority || 'medium'}
+                              onStatusChange={(status) => handleUpdateStatus(tab.id, status)}
+                              onPriorityChange={(priority) => handleUpdatePriority(tab.id, priority)}
+                              onAddNote={() => handleAddNote(tab.id)}
+                              onExport={() => {/* TODO: Export single tab */}}
+                            />
+                            <TabActions
+                              tab={tab}
+                              onClose={handleCloseTab}
+                              onPin={handlePinTab}
+                              onDuplicate={handleDuplicateTab}
+                            />
+                          </div>
                         </div>
                       ))}
                     </div>
