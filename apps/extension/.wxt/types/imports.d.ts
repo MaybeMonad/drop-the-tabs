@@ -31,6 +31,7 @@ declare global {
   const useReducer: typeof import('react')['useReducer']
   const useRef: typeof import('react')['useRef']
   const useState: typeof import('react')['useState']
+  const useSyncStatus: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/hooks/useSyncStatus')['useSyncStatus']
 }
 // for type re-export
 declare global {

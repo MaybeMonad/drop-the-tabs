@@ -126,21 +126,54 @@ export default defineBackground(() => {
             
           case 'saveSession':
             const sessionId = await tabManager.saveSession(request.name);
+            // Also sync to Firebase if connected
+            if (syncService.isConnected() && sessionId) {
+              const allSessions = await tabManager.getSessions();
+              const newSession = allSessions.find((s: any) => s.id === sessionId);
+              if (newSession) {
+                await syncService.saveSession(newSession);
+              }
+            }
             sendResponse({ success: true, sessionId });
             break;
             
           case 'getSessions':
-            const sessions = await tabManager.getSessions();
-            sendResponse({ success: true, data: sessions });
+            let localSessions = await tabManager.getSessions();
+            // Also try to get from Firebase
+            if (syncService.isConnected()) {
+              try {
+                const cloudSessions = await syncService.getSessions();
+                // Merge local and cloud sessions (avoid duplicates by id)
+                const sessionIds = new Set(localSessions.map((s: any) => s.id));
+                for (const cloudSession of cloudSessions) {
+                  if (!sessionIds.has(cloudSession.id)) {
+                    localSessions.push(cloudSession);
+                  }
+                }
+                // Sort by createdAt
+                localSessions.sort((a: any, b: any) => (b.createdAt?.seconds || b.createdAt) - (a.createdAt?.seconds || a.createdAt));
+              } catch (e) {
+                console.error('[DTT] Failed to get cloud sessions:', e);
+              }
+            }
+            sendResponse({ success: true, data: localSessions });
             break;
             
           case 'saveCustomSession':
             await tabManager.saveCustomSession(request.session);
+            // Also sync to Firebase
+            if (syncService.isConnected()) {
+              await syncService.saveSession(request.session);
+            }
             sendResponse({ success: true });
             break;
             
           case 'deleteSession':
             await tabManager.deleteSession(request.sessionId);
+            // Also delete from Firebase
+            if (syncService.isConnected()) {
+              await syncService.deleteSession(request.sessionId);
+            }
             sendResponse({ success: true });
             break;
             

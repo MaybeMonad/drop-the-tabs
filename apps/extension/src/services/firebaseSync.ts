@@ -6,6 +6,10 @@ import {
   doc, 
   setDoc, 
   serverTimestamp,
+  query,
+  getDocs,
+  orderBy,
+  deleteDoc,
   type Firestore 
 } from 'firebase/firestore';
 import { 
@@ -111,6 +115,58 @@ export class FirebaseSyncService {
 
   getUserId(): string | null {
     return this.user?.uid || null;
+  }
+
+  async saveSession(session: any): Promise<void> {
+    if (!this.db || !this.user) {
+      console.warn('[FirebaseSync] Not ready to save session');
+      return;
+    }
+
+    try {
+      const sessionRef = doc(collection(this.db, 'users', this.user.uid, 'sessions'));
+      
+      await setDoc(sessionRef, {
+        ...session,
+        deviceId: this.deviceId,
+        createdAt: serverTimestamp(),
+      });
+
+      console.log('[FirebaseSync] Session saved:', session.name);
+    } catch (error) {
+      console.error('[FirebaseSync] Save session error:', error);
+    }
+  }
+
+  async getSessions(): Promise<any[]> {
+    if (!this.db || !this.user) return [];
+
+    try {
+      const sessionsQuery = query(
+        collection(this.db, 'users', this.user.uid, 'sessions'),
+        orderBy('createdAt', 'desc')
+      );
+      
+      const snapshot = await getDocs(sessionsQuery);
+      return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+    } catch (error) {
+      console.error('[FirebaseSync] Get sessions error:', error);
+      return [];
+    }
+  }
+
+  async deleteSession(sessionId: string): Promise<void> {
+    if (!this.db || !this.user) return;
+
+    try {
+      await deleteDoc(doc(this.db, 'users', this.user.uid, 'sessions', sessionId));
+      console.log('[FirebaseSync] Session deleted:', sessionId);
+    } catch (error) {
+      console.error('[FirebaseSync] Delete session error:', error);
+    }
   }
 
   private async setupEncryption(): Promise<void> {

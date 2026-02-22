@@ -562,28 +562,6 @@ export default function Popup() {
     }
   };
 
-  const groupedTabs: TabGroup = tabs.reduce((acc, tab) => {
-    try {
-      const domain = new URL(tab.url).hostname.replace(/^www\./, '');
-      if (!acc[domain]) acc[domain] = [];
-      acc[domain].push(tab);
-    } catch {
-      if (!acc['Other']) acc['Other'] = [];
-      acc['Other'].push(tab);
-    }
-    return acc;
-  const groupedTabs: TabGroup = filteredTabs.reduce((acc, tab) => {
-    try {
-      const domain = new URL(tab.url).hostname.replace(/^www\./, '') || 'Other';
-      if (!acc[domain]) acc[domain] = [];
-      acc[domain].push(tab);
-    } catch {
-      if (!acc['Other']) acc['Other'] = [];
-      acc['Other'].push(tab);
-    }
-    return acc;
-  }, {} as TabGroup);
-
   const totalTabs = filteredTabs.length;
   const totalGroups = Object.keys(groupedTabs).length;
 
