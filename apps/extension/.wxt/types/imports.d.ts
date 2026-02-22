@@ -11,6 +11,7 @@ declare global {
   const InvalidMatchPattern: typeof import('wxt/sandbox')['InvalidMatchPattern']
   const MatchPattern: typeof import('wxt/sandbox')['MatchPattern']
   const MigrationError: typeof import('wxt/storage')['MigrationError']
+  const NaturalLanguageCommand: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/components/NaturalLanguageCommand')['NaturalLanguageCommand']
   const PRIORITY_META: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/contentCategory')['PRIORITY_META']
   const Popup: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/components/Popup')['default']
   const PriorityBadge: typeof import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/components/CategoryUI')['PriorityBadge']
