@@ -19,12 +19,13 @@ import { arrayBufferToBase64 } from '@drop-the-tabs/shared-api';
 
 // Firebase config - 使用你的项目
 const firebaseConfig = {
-  apiKey: "AIzaSyC-your-api-key", // 需要从 Firebase Console 获取
+  apiKey: "AIzaSyDo2tJiCGfvG7XrNdrHSNiMQsQZ8FCn3so",
   authDomain: "drop-the-tabs.firebaseapp.com",
   projectId: "drop-the-tabs",
-  storageBucket: "drop-the-tabs.appspot.com",
+  storageBucket: "drop-the-tabs.firebasestorage.app",
   messagingSenderId: "879807445789",
-  appId: "1:879807445789:web:xxx"
+  appId: "1:879807445789:web:bd6a7a40b9deeb31997ff4",
+  measurementId: "G-HTWYNY1XH2"
 };
 
 export class FirebaseSyncService {
