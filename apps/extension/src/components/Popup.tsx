@@ -607,6 +607,162 @@ function TabDistributionChart({ tabs }: { tabs: TabInfo[] }) {
   );
 }
 
+// Session Card Component - Expandable like DomainGroup
+function SessionCard({
+  session,
+  onRestore,
+  onDelete,
+}: {
+  session: Session;
+  onRestore: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [showActions, setShowActions] = useState(false);
+
+  // Group session tabs by domain
+  const groupedTabs = useMemo(() => {
+    const groups: Record<string, Session['tabs']> = {};
+    session.tabs.forEach(tab => {
+      try {
+        const domain = new URL(tab.url).hostname.replace(/^www\./, '') || 'Other';
+        if (!groups[domain]) groups[domain] = [];
+        groups[domain].push(tab);
+      } catch {
+        if (!groups['Other']) groups['Other'] = [];
+        groups['Other'].push(tab);
+      }
+    });
+    // Sort by count descending
+    return Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
+  }, [session.tabs]);
+
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm(`Delete session "${session.name}"?`)) {
+      onDelete(session.id);
+    }
+  };
+
+  const handleRestore = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onRestore(session.id);
+  };
+
+  return (
+    <motion.div variants={staggerItem} layout>
+      <GlassCard className="overflow-hidden" hover={false}>
+        {/* Session Header */}
+        <div
+          className="flex items-center justify-between px-3 py-2.5 bg-zinc-50/50 border-b border-zinc-100 cursor-pointer"
+          onClick={() => setIsExpanded(!isExpanded)}
+          onMouseEnter={() => setShowActions(true)}
+          onMouseLeave={() => setShowActions(false)}
+        >
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <motion.div
+              animate={{ rotate: isExpanded ? 0 : -90 }}
+              transition={{ duration: 0.15 }}
+            >
+              <CaretDown className="w-3 h-3 text-zinc-400" weight="bold" />
+            </motion.div>
+            
+            <div className="flex-1 min-w-0">
+              <h3 className="text-[11px] font-semibold text-zinc-900 truncate">
+                {session.name}
+              </h3>
+              <p className="text-[9px] text-zinc-500">
+                {new Date(session.createdAt).toLocaleDateString()}
+                {' · '}
+                {session.tabs.length} tabs
+                {groupedTabs.length > 1 && ` · ${groupedTabs.length} domains`}
+              </p>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className={`flex items-center gap-1 transition-opacity duration-150 ${showActions ? 'opacity-100' : 'opacity-0'}`}>
+            <button
+              onClick={handleRestore}
+              className="flex items-center gap-1 px-2 py-1 text-[9px] font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-md transition-colors"
+            >
+              <CaretRight className="w-2.5 h-2.5" weight="fill" />
+              Restore
+            </button>
+            <button
+              onClick={handleDelete}
+              className="p-1.5 text-zinc-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+            >
+              <Trash className="w-3 h-3" weight="regular" />
+            </button>
+          </div>
+        </div>
+
+        {/* Session Content - Expandable */}
+        <AnimatePresence initial={false}>
+          {isExpanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+              className="overflow-hidden"
+            >
+              <div className="divide-y divide-zinc-100/50 max-h-[300px] overflow-y-auto scrollbar-thin">
+                {groupedTabs.map(([domain, tabs], groupIndex) => (
+                  <div key={domain} className="p-2">
+                    {/* Domain Header within Session */}
+                    <div className="flex items-center gap-1.5 mb-1.5 px-1">
+                      <Avatar.Root className="w-4 h-4 rounded bg-white border border-zinc-200 flex items-center justify-center">
+                        <Avatar.Fallback className="text-[7px] font-bold text-zinc-400 uppercase">
+                          {domain[0]}
+                        </Avatar.Fallback>
+                      </Avatar.Root>
+                      <span className="text-[10px] font-medium text-zinc-600 truncate">
+                        {domain}
+                      </span>
+                      <span className="text-[8px] text-zinc-400">
+                        ({tabs.length})
+                      </span>
+                    </div>
+                    
+                    {/* Tabs List */}
+                    <div className="space-y-0.5 pl-6">
+                      {tabs.map((tab, tabIndex) => (
+                        <div
+                          key={tabIndex}
+                          className="flex items-center gap-2 py-1 px-1.5 rounded hover:bg-zinc-50 group/tab"
+                        >
+                          {tab.pinned && (
+                            <PushPin className="w-2.5 h-2.5 text-amber-400 flex-shrink-0" weight="fill" />
+                          )}
+                          <span className="flex-1 text-[10px] text-zinc-700 truncate">
+                            {tab.title || tab.url}
+                          </span>
+                          <a
+                            href={tab.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="opacity-0 group-hover/tab:opacity-100 p-1 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded transition-all"
+                            title="Open in new tab"
+                          >
+                            <Globe className="w-2.5 h-2.5" weight="regular" />
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </GlassCard>
+    </motion.div>
+  );
+}
+
 // Optimized Virtual Tab List with reduced re-renders
 const VirtualTabList = React.memo(({
   tabs,
@@ -1788,7 +1944,7 @@ export default function Popup() {
             <ScrollArea.Root className="flex-1 min-h-0">
               <ScrollArea.Viewport className="h-full">
                 <motion.div
-                  className="space-y-1.5"
+                  className="space-y-2"
                   variants={staggerContainer}
                   initial="hidden"
                   animate="show"
@@ -1813,53 +1969,12 @@ export default function Popup() {
                     </motion.div>
                   ) : (
                     sessions.map((session) => (
-                      <motion.div
+                      <SessionCard
                         key={session.id}
-                        variants={staggerItem}
-                        layout
-                      >
-                        <GlassCard className="p-2.5 hover:border-rose-200/50 transition-colors">
-                          <div className="flex items-center gap-2.5">
-                            <div
-                              className="flex-1 min-w-0 cursor-pointer"
-                              onClick={() => handleRestoreSession(session.id)}
-                            >
-                              <h3 className="text-[11px] font-semibold text-zinc-900 truncate">
-                                {session.name}
-                              </h3>
-                              <p className="text-[9px] text-zinc-500 mt-0.5">
-                                {new Date(session.createdAt).toLocaleDateString()}
-                                {' · '}
-                                {session.tabs.length} tabs
-                              </p>
-                            </div>
-
-                            <div className="flex items-center gap-1">
-                              <motion.button
-                                onClick={() => handleRestoreSession(session.id)}
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                className="flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-600 rounded-lg text-[9px] font-medium hover:bg-emerald-100 transition-colors"
-                              >
-                                <CaretRight className="w-2.5 h-2.5" weight="fill" />
-                                Restore
-                              </motion.button>
-
-                              <motion.button
-                                onClick={() => handleDeleteSession(session.id)}
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                className="p-1.5 text-zinc-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
-                              >
-                                <Trash
-                                  className="w-3 h-3"
-                                  weight="regular"
-                                />
-                              </motion.button>
-                            </div>
-                          </div>
-                        </GlassCard>
-                      </motion.div>
+                        session={session}
+                        onRestore={handleRestoreSession}
+                        onDelete={handleDeleteSession}
+                      />
                     ))
                   )}
                 </motion.div>
