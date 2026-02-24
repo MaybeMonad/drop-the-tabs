@@ -356,46 +356,100 @@ function DedupConfirmModal({
   );
 }
 
-// Daily Tabs Chart Component
+// Simple Bar Chart Component - no animation issues
 function DailyTabsChart({ data }: { data: DailyTabCount[] }) {
-  if (data.length === 0) {
-    return (
-      <div className="text-center py-8 text-zinc-400">
-        <ChartBar className="w-10 h-10 mx-auto mb-2 opacity-50" weight="regular" />
-        <p className="text-sm">No data yet</p>
-      </div>
-    );
-  }
+  // Generate sample data if empty (for testing/demo)
+  const chartData = useMemo(() => {
+    if (data.length === 0) {
+      // Generate last 7 days with 0 counts
+      const today = new Date();
+      return Array.from({ length: 7 }, (_, i) => {
+        const date = new Date(today);
+        date.setDate(date.getDate() - (6 - i));
+        return {
+          date: date.toISOString().split('T')[0],
+          count: 0
+        };
+      });
+    }
+    // Fill missing days to ensure 7 days
+    const today = new Date();
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const date = new Date(today);
+      date.setDate(date.getDate() - (6 - i));
+      return date.toISOString().split('T')[0];
+    });
+    
+    return last7Days.map(dateStr => {
+      const existing = data.find(d => d.date === dateStr);
+      return existing || { date: dateStr, count: 0 };
+    });
+  }, [data]);
 
-  const maxCount = Math.max(...data.map((d) => d.count), 1);
+  const maxCount = Math.max(...chartData.map((d) => d.count), 10); // Min 10 for visual
+  const avg = Math.round(chartData.reduce((a, b) => a + b.count, 0) / chartData.length);
+  
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return `${date.getMonth() + 1}/${date.getDate()}`;
   };
 
+  const formatDay = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return days[date.getDay()];
+  };
+
   return (
     <div className="space-y-3">
-      <div className="flex items-end justify-between h-32 gap-1">
-        {data.slice(-7).map((day, i) => {
-          const height = (day.count / maxCount) * 100;
+      {/* Chart */}
+      <div className="h-32 flex items-end justify-between gap-2">
+        {chartData.map((day, i) => {
+          const height = maxCount > 0 ? (day.count / maxCount) * 100 : 0;
+          const isToday = i === chartData.length - 1;
+          
           return (
-            <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
-              <motion.div
-                initial={{ height: 0 }}
-                animate={{ height: `${height}%` }}
-                transition={{ duration: 0.4, delay: i * 0.05 }}
-                className="w-full bg-gradient-to-t from-rose-400 to-rose-500 rounded-t-lg min-h-[4px]"
-              />
-              <span className="text-[9px] text-zinc-400">{formatDate(day.date)}</span>
+            <div key={day.date} className="flex-1 flex flex-col items-center gap-1.5">
+              {/* Value label */}
+              <span className={`text-[10px] font-semibold ${isToday ? 'text-rose-500' : 'text-zinc-500'}`}>
+                {day.count > 0 ? day.count : ''}
+              </span>
+              
+              {/* Bar */}
+              <div className="w-full bg-zinc-100 rounded-t-md relative" style={{ height: '80px' }}>
+                <div
+                  className={`absolute bottom-0 left-0 right-0 rounded-t-md transition-all duration-500 ease-out ${
+                    isToday 
+                      ? 'bg-gradient-to-t from-rose-500 to-rose-400' 
+                      : 'bg-gradient-to-t from-zinc-400 to-zinc-300'
+                  }`}
+                  style={{ height: `${Math.max(height, 0)}%` }}
+                />
+              </div>
+              
+              {/* Date label */}
+              <div className="text-center">
+                <span className="block text-[9px] text-zinc-400">{formatDay(day.date)}</span>
+                <span className={`block text-[10px] font-medium ${isToday ? 'text-rose-600' : 'text-zinc-600'}`}>
+                  {formatDate(day.date)}
+                </span>
+              </div>
             </div>
           );
         })}
       </div>
-      <div className="flex items-center justify-between text-xs text-zinc-500">
-        <span>Daily Total Tabs</span>
-        <span className="font-medium text-zinc-700">
-          Avg: {Math.round(data.reduce((a, b) => a + b.count, 0) / data.length)}
-        </span>
+      
+      {/* Stats row */}
+      <div className="flex items-center justify-between pt-2 border-t border-zinc-100">
+        <span className="text-[11px] text-zinc-500">Last 7 Days</span>
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] text-zinc-500">
+            Avg: <span className="font-semibold text-zinc-700">{avg}</span>
+          </span>
+          <span className="text-[11px] text-zinc-500">
+            Max: <span className="font-semibold text-zinc-700">{maxCount}</span>
+          </span>
+        </div>
       </div>
     </div>
   );
