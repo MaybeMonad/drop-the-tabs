@@ -337,8 +337,15 @@ export default defineBackground(() => {
             break;
 
           case 'updateDailyGoalSettings':
-            await tabManager.updateDailyGoalSettings(request.settings);
-            sendResponse({ success: true });
+            console.log('[BG] Updating daily goal settings:', request.settings);
+            try {
+              await tabManager.updateDailyGoalSettings(request.settings);
+              console.log('[BG] Settings updated successfully');
+              sendResponse({ success: true });
+            } catch (error) {
+              console.error('[BG] Failed to update settings:', error);
+              sendResponse({ success: false, error: String(error) });
+            }
             break;
 
           case 'checkAndEnforceDailyGoal':

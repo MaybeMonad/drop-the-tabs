@@ -399,7 +399,9 @@ export class TabManager {
   }
 
   async updateDailyGoalSettings(settings: Partial<Settings['dailyDropGoal']>): Promise<void> {
+    console.log('[TM] Updating settings:', settings);
     const currentSettings = await this.getSettings();
+    console.log('[TM] Current settings:', currentSettings);
     const newSettings = {
       ...currentSettings,
       dailyDropGoal: {
@@ -407,7 +409,13 @@ export class TabManager {
         ...settings
       }
     };
+    console.log('[TM] New settings to save:', newSettings);
     await chrome.storage.local.set({ 'dtt_settings': newSettings });
+    console.log('[TM] Settings saved to storage');
+    
+    // Verify save
+    const verify = await chrome.storage.local.get('dtt_settings');
+    console.log('[TM] Verified saved settings:', verify);
   }
 
   async checkAndEnforceDailyGoal(): Promise<{ enforced: boolean; closedCount: number; message?: string }> {

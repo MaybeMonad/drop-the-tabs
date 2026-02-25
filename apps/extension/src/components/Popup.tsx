@@ -557,13 +557,20 @@ function DailyDropGoalCard({ onMessage }: DailyGoalSettingsProps) {
 
   const updateSettings = async (newSettings: Partial<typeof settings>) => {
     setLoading(true);
+    console.log('[DailyDropGoal] Updating settings:', newSettings);
     
     try {
       // First update backend
-      await chrome.runtime.sendMessage({
+      const response = await chrome.runtime.sendMessage({
         action: 'updateDailyGoalSettings',
         settings: newSettings
       });
+      
+      console.log('[DailyDropGoal] Backend response:', response);
+      
+      if (!response.success) {
+        throw new Error(response.error || 'Unknown error');
+      }
       
       // Then update local state to match
       setSettings(prev => ({ ...prev, ...newSettings }));
