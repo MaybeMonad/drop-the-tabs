@@ -560,29 +560,47 @@ function DailyDropGoalCard({ onMessage }: DailyGoalSettingsProps) {
     console.log('[DailyDropGoal] Updating settings:', newSettings);
     
     try {
-      // First update backend
-      console.log('[DailyDropGoal] Sending message...');
-      const response = await chrome.runtime.sendMessage({
+      // Method 1: Try to update via background script
+      console.log('[DailyDropGoal] Trying background method...');
+      const message = {
         action: 'updateDailyGoalSettings',
         settings: newSettings
-      });
+      };
       
-      console.log('[DailyDropGoal] Backend response:', JSON.stringify(response));
-      
-      if (!response || !response.success) {
-        throw new Error(response?.error || 'Unknown error');
+      let response;
+      try {
+        response = await chrome.runtime.sendMessage(message);
+        console.log('[DailyDropGoal] Background response:', JSON.stringify(response));
+      } catch (bgError) {
+        console.log('[DailyDropGoal] Background failed, using direct method:', bgError);
+        // Method 2: Fallback - save directly to storage
+        const result = await chrome.storage.local.get('dtt_settings');
+        const currentSettings = result.dtt_settings || {};
+        const updatedSettings = {
+          ...currentSettings,
+          dailyDropGoal: {
+            ...(currentSettings.dailyDropGoal || {}),
+            ...newSettings
+          }
+        };
+        await chrome.storage.local.set({ 'dtt_settings': updatedSettings });
+        console.log('[DailyDropGoal] Saved directly to storage');
+        response = { success: true };
       }
       
-      // Then update local state to match
-      setSettings(prev => ({ ...prev, ...newSettings }));
+      if (!response || !response.success) {
+        throw new Error(response?.error || 'Failed to save settings');
+      }
       
+      // Update local state
+      setSettings(prev => ({ ...prev, ...newSettings }));
       onMessage?.('Settings updated', 'success');
       
-      // Reload progress to reflect changes
+      // Reload progress
       await loadProgress();
     } catch (e) {
       console.error('[DailyDropGoal] Failed to update settings:', e);
-      onMessage?.('Failed to update settings', 'error');
+      onMessage?.('Failed: ' + (e as Error).message, 'error');
     } finally {
       setLoading(false);
     }
