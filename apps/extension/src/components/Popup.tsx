@@ -473,18 +473,42 @@ function DailyDropGoalCard({ onMessage }: DailyGoalSettingsProps) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    loadSettings();
-    loadProgress();
-    loadStats();
+    console.log('[DailyDropGoal] Component mounted, loading data...');
+    
+    const loadAll = async () => {
+      try {
+        await loadSettings();
+      } catch (e) {
+        console.error('[DailyDropGoal] Failed to load settings:', e);
+      }
+      
+      try {
+        await loadProgress();
+      } catch (e) {
+        console.error('[DailyDropGoal] Failed to load progress:', e);
+      }
+      
+      try {
+        await loadStats();
+      } catch (e) {
+        console.error('[DailyDropGoal] Failed to load stats:', e);
+      }
+    };
+    
+    loadAll();
   }, []);
 
   const loadSettings = async () => {
-    const response = await chrome.runtime.sendMessage({ action: 'getDailyGoalProgress' });
-    if (response.success) {
-      const result = await chrome.storage.local.get('dtt_settings');
-      if (result.dtt_settings?.dailyDropGoal) {
-        setSettings(result.dtt_settings.dailyDropGoal);
-      }
+    console.log('[DailyDropGoal] Loading settings...');
+    const result = await chrome.storage.local.get('dtt_settings');
+    console.log('[DailyDropGoal] Storage result:', result);
+    const savedSettings = result.dtt_settings?.dailyDropGoal;
+    
+    if (savedSettings) {
+      console.log('[DailyDropGoal] Found saved settings:', savedSettings);
+      setSettings(savedSettings);
+    } else {
+      console.log('[DailyDropGoal] No saved settings, using defaults');
     }
   };
 
@@ -504,16 +528,27 @@ function DailyDropGoalCard({ onMessage }: DailyGoalSettingsProps) {
 
   const updateSettings = async (newSettings: Partial<typeof settings>) => {
     setLoading(true);
-    const updated = { ...settings, ...newSettings };
-    setSettings(updated);
     
-    await chrome.runtime.sendMessage({
-      action: 'updateDailyGoalSettings',
-      settings: newSettings
-    });
-    
-    setLoading(false);
-    onMessage?.('Settings updated', 'success');
+    try {
+      // First update backend
+      await chrome.runtime.sendMessage({
+        action: 'updateDailyGoalSettings',
+        settings: newSettings
+      });
+      
+      // Then update local state to match
+      setSettings(prev => ({ ...prev, ...newSettings }));
+      
+      onMessage?.('Settings updated', 'success');
+      
+      // Reload progress to reflect changes
+      await loadProgress();
+    } catch (e) {
+      console.error('[DailyDropGoal] Failed to update settings:', e);
+      onMessage?.('Failed to update settings', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const testEnforce = async () => {
