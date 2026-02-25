@@ -513,9 +513,38 @@ function DailyDropGoalCard({ onMessage }: DailyGoalSettingsProps) {
   };
 
   const loadProgress = async () => {
-    const response = await chrome.runtime.sendMessage({ action: 'getDailyGoalProgress' });
-    if (response.success) {
-      setProgress(response.data);
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'getDailyGoalProgress' });
+      if (response.success) {
+        setProgress(response.data);
+      } else {
+        // Set default progress if loading failed
+        const today = new Date().toISOString().split('T')[0];
+        setProgress({
+          date: today,
+          startCount: 0,
+          currentCount: 0,
+          targetCount: 0,
+          reduced: 0,
+          remaining: settings.targetReduction,
+          goalMet: false,
+          enforced: false
+        });
+      }
+    } catch (e) {
+      console.error('[DailyDropGoal] Failed to load progress:', e);
+      // Set default progress on error
+      const today = new Date().toISOString().split('T')[0];
+      setProgress({
+        date: today,
+        startCount: 0,
+        currentCount: 0,
+        targetCount: 0,
+        reduced: 0,
+        remaining: settings.targetReduction,
+        goalMet: false,
+        enforced: false
+      });
     }
   };
 
