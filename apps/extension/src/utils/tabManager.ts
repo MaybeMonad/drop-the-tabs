@@ -326,7 +326,168 @@ export class TabManager {
       autoGroup: true,
       autoCleanup: false,
       maxTabs: 20,
+      dailyDropGoal: {
+        enabled: false,
+        targetReduction: 10,
+        autoEnforce: false,
+        enforceTime: '23:59'
+      },
       ...result['dtt_settings']
     };
+  }
+
+  // ==================== Daily Drop Goal ====================
+
+  async getDailyGoalProgress(): Promise<DailyGoalProgress> {
+    const today = new Date().toISOString().split('T')[0];
+    const settings = await this.getSettings();
+    
+    if (!settings.dailyDropGoal?.enabled) {
+      return {
+        date: today,
+        startCount: 0,
+        currentCount: 0,
+        targetCount: 0,
+        reduced: 0,
+        remaining: 0,
+        goalMet: true,
+        enforced: false
+      };
+    }
+
+    // Get today's progress
+    const result = await chrome.storage.local.get(['dtt_daily_goal_progress', 'dtt_daily_tab_counts']);
+    let progress: DailyGoalProgress | undefined = result['dtt_daily_goal_progress'];
+    const dailyCounts: Array<{date: string; count: number}> = result['dtt_daily_tab_counts'] || [];
+    
+    const currentTabs = await chrome.tabs.query({});
+    const currentCount = currentTabs.length;
+    const targetReduction = settings.dailyDropGoal.targetReduction;
+
+    // Check if this is a new day
+    if (!progress || progress.date !== today) {
+      // Calculate yesterday's count
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      const yesterdayCount = dailyCounts.find(d => d.date === yesterdayStr)?.count || currentCount;
+      
+      // Initialize new day's progress
+      progress = {
+        date: today,
+        startCount: yesterdayCount,
+        currentCount: currentCount,
+        targetCount: Math.max(0, yesterdayCount - targetReduction),
+        reduced: yesterdayCount - currentCount,
+        remaining: Math.max(0, targetReduction - (yesterdayCount - currentCount)),
+        goalMet: (yesterdayCount - currentCount) >= targetReduction,
+        enforced: false
+      };
+      
+      await chrome.storage.local.set({ 'dtt_daily_goal_progress': progress });
+    } else {
+      // Update current progress
+      progress.currentCount = currentCount;
+      progress.reduced = progress.startCount - currentCount;
+      progress.remaining = Math.max(0, targetReduction - progress.reduced);
+      progress.goalMet = progress.reduced >= targetReduction;
+      
+      await chrome.storage.local.set({ 'dtt_daily_goal_progress': progress });
+    }
+
+    return progress;
+  }
+
+  async updateDailyGoalSettings(settings: Partial<Settings['dailyDropGoal']>): Promise<void> {
+    const currentSettings = await this.getSettings();
+    const newSettings = {
+      ...currentSettings,
+      dailyDropGoal: {
+        ...currentSettings.dailyDropGoal,
+        ...settings
+      }
+    };
+    await chrome.storage.local.set({ 'dtt_settings': newSettings });
+  }
+
+  async checkAndEnforceDailyGoal(): Promise<{ enforced: boolean; closedCount: number; message?: string }> {
+    const settings = await this.getSettings();
+    
+    if (!settings.dailyDropGoal?.enabled || !settings.dailyDropGoal?.autoEnforce) {
+      return { enforced: false, closedCount: 0 };
+    }
+
+    const progress = await this.getDailyGoalProgress();
+    
+    // Already met goal or already enforced
+    if (progress.goalMet || progress.enforced) {
+      return { enforced: false, closedCount: 0 };
+    }
+
+    // Need to enforce - close remaining tabs
+    const tabsToClose = progress.remaining;
+    if (tabsToClose <= 0) {
+      return { enforced: false, closedCount: 0 };
+    }
+
+    // Get closable tabs (non-pinned, sorted by last access time - oldest first)
+    const tabs = await chrome.tabs.query({ pinned: false });
+    const sortedTabs = tabs
+      .filter(t => !t.active) // Don't close active tab
+      .sort((a, b) => (a.lastAccessed || 0) - (b.lastAccessed || 0));
+
+    const tabsToRemove = sortedTabs.slice(0, tabsToClose);
+    
+    if (tabsToRemove.length === 0) {
+      return { 
+        enforced: false, 
+        closedCount: 0, 
+        message: 'No tabs available to close (all tabs are pinned or active)' 
+      };
+    }
+
+    // Close the tabs
+    await chrome.tabs.remove(tabsToRemove.map(t => t.id!).filter(Boolean));
+
+    // Update progress
+    progress.enforced = true;
+    progress.currentCount = progress.currentCount - tabsToRemove.length;
+    progress.reduced = progress.reduced + tabsToRemove.length;
+    progress.remaining = Math.max(0, progress.remaining - tabsToRemove.length);
+    progress.goalMet = progress.reduced >= settings.dailyDropGoal.targetReduction;
+    await chrome.storage.local.set({ 'dtt_daily_goal_progress': progress });
+
+    return { 
+      enforced: true, 
+      closedCount: tabsToRemove.length,
+      message: `Daily goal enforced: Closed ${tabsToRemove.length} tabs to meet your daily drop target.`
+    };
+  }
+
+  async getDailyGoalStats(): Promise<{ streak: number; bestDay: number; avgReduction: number }> {
+    const result = await chrome.storage.local.get('dtt_daily_goal_history');
+    const history: Array<{ date: string; reduced: number; goalMet: boolean }> = result['dtt_daily_goal_history'] || [];
+    
+    if (history.length === 0) {
+      return { streak: 0, bestDay: 0, avgReduction: 0 };
+    }
+
+    // Calculate streak
+    let streak = 0;
+    const today = new Date().toISOString().split('T')[0];
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].goalMet) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+
+    // Calculate best day and average
+    const reductions = history.map(h => h.reduced);
+    const bestDay = Math.max(...reductions);
+    const avgReduction = Math.round(reductions.reduce((a, b) => a + b, 0) / reductions.length);
+
+    return { streak, bestDay, avgReduction };
   }
 }

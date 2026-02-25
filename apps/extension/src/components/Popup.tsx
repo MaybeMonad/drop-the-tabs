@@ -36,6 +36,7 @@ import {
   CaretDown,
   FolderOpen,
   DownloadSimple,
+  Target,
 } from "@phosphor-icons/react";
 import type { TabInfo, Session, TabStats } from "../utils/types";
 import "../style.css";
@@ -452,6 +453,208 @@ function DailyTabsChart({ data }: { data: DailyTabCount[] }) {
         </div>
       </div>
     </div>
+  );
+}
+
+// Daily Drop Goal Component
+interface DailyGoalSettingsProps {
+  onMessage?: (text: string, type: 'success' | 'info' | 'error') => void;
+}
+
+function DailyDropGoalCard({ onMessage }: DailyGoalSettingsProps) {
+  const [settings, setSettings] = useState({
+    enabled: false,
+    targetReduction: 10,
+    autoEnforce: false,
+    enforceTime: '23:59'
+  });
+  const [progress, setProgress] = useState<any>(null);
+  const [stats, setStats] = useState({ streak: 0, bestDay: 0, avgReduction: 0 });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    loadSettings();
+    loadProgress();
+    loadStats();
+  }, []);
+
+  const loadSettings = async () => {
+    const response = await chrome.runtime.sendMessage({ action: 'getDailyGoalProgress' });
+    if (response.success) {
+      const result = await chrome.storage.local.get('dtt_settings');
+      if (result.dtt_settings?.dailyDropGoal) {
+        setSettings(result.dtt_settings.dailyDropGoal);
+      }
+    }
+  };
+
+  const loadProgress = async () => {
+    const response = await chrome.runtime.sendMessage({ action: 'getDailyGoalProgress' });
+    if (response.success) {
+      setProgress(response.data);
+    }
+  };
+
+  const loadStats = async () => {
+    const response = await chrome.runtime.sendMessage({ action: 'getDailyGoalStats' });
+    if (response.success) {
+      setStats(response.data);
+    }
+  };
+
+  const updateSettings = async (newSettings: Partial<typeof settings>) => {
+    setLoading(true);
+    const updated = { ...settings, ...newSettings };
+    setSettings(updated);
+    
+    await chrome.runtime.sendMessage({
+      action: 'updateDailyGoalSettings',
+      settings: newSettings
+    });
+    
+    setLoading(false);
+    onMessage?.('Settings updated', 'success');
+  };
+
+  const testEnforce = async () => {
+    setLoading(true);
+    const response = await chrome.runtime.sendMessage({ action: 'checkAndEnforceDailyGoal' });
+    setLoading(false);
+    
+    if (response.enforced) {
+      onMessage?.(response.message || `Closed ${response.closedCount} tabs`, 'success');
+    } else {
+      onMessage?.(response.message || 'No tabs to close', 'info');
+    }
+    
+    loadProgress();
+  };
+
+  const percentage = progress && progress.startCount > 0 
+    ? Math.min(100, (progress.reduced / settings.targetReduction) * 100)
+    : 0;
+
+  return (
+    <GlassCard className="p-4">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-rose-50 flex items-center justify-center">
+            <Target className="w-3.5 h-3.5 text-rose-500" weight="regular" />
+          </div>
+          <div>
+            <h3 className="text-xs font-semibold text-zinc-900">Daily Drop Goal</h3>
+            <p className="text-[9px] text-zinc-500">Reduce tabs daily</p>
+          </div>
+        </div>
+        
+        <label className="relative inline-flex items-center cursor-pointer">
+          <input
+            type="checkbox"
+            checked={settings.enabled}
+            onChange={(e) => updateSettings({ enabled: e.target.checked })}
+            className="sr-only peer"
+          />
+          <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-500"></div>
+        </label>
+      </div>
+
+      {settings.enabled && progress && (
+        <>
+          {/* Progress Bar */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between text-[10px] mb-1">
+              <span className="text-zinc-600">
+                {progress.reduced} / {settings.targetReduction} tabs
+              </span>
+              <span className={`font-medium ${progress.goalMet ? 'text-emerald-500' : 'text-rose-500'}`}>
+                {progress.goalMet ? '✓ Goal Met!' : `${progress.remaining} to go`}
+              </span>
+            </div>
+            <div className="h-2 bg-zinc-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  progress.goalMet 
+                    ? 'bg-gradient-to-r from-emerald-400 to-emerald-500' 
+                    : 'bg-gradient-to-r from-rose-400 to-rose-500'
+                }`}
+                style={{ width: `${percentage}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            <div className="text-center p-2 bg-zinc-50 rounded-lg">
+              <div className="text-lg font-bold text-zinc-900">{stats.streak}</div>
+              <div className="text-[9px] text-zinc-500">Day Streak</div>
+            </div>
+            <div className="text-center p-2 bg-zinc-50 rounded-lg">
+              <div className="text-lg font-bold text-zinc-900">{stats.bestDay}</div>
+              <div className="text-[9px] text-zinc-500">Best Day</div>
+            </div>
+            <div className="text-center p-2 bg-zinc-50 rounded-lg">
+              <div className="text-lg font-bold text-zinc-900">{stats.avgReduction}</div>
+              <div className="text-[9px] text-zinc-500">Avg/Day</div>
+            </div>
+          </div>
+
+          {/* Settings */}
+          <div className="space-y-3 border-t border-zinc-100 pt-3">
+            <div>
+              <label className="text-[10px] font-medium text-zinc-700 block mb-1">
+                Target Reduction: {settings.targetReduction} tabs
+              </label>
+              <input
+                type="range"
+                min="1"
+                max="100"
+                value={settings.targetReduction}
+                onChange={(e) => updateSettings({ targetReduction: parseInt(e.target.value) })}
+                className="w-full h-1 bg-zinc-200 rounded-lg appearance-none cursor-pointer accent-rose-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-zinc-700">Auto-enforce at {settings.enforceTime}</span>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.autoEnforce}
+                  onChange={(e) => updateSettings({ autoEnforce: e.target.checked })}
+                  className="sr-only peer"
+                />
+                <div className="w-8 h-4 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-rose-500"></div>
+              </label>
+            </div>
+
+            {settings.autoEnforce && (
+              <input
+                type="time"
+                value={settings.enforceTime}
+                onChange={(e) => updateSettings({ enforceTime: e.target.value })}
+                className="w-full px-2 py-1.5 text-[11px] border border-zinc-200 rounded-lg focus:outline-none focus:border-rose-500"
+              />
+            )}
+
+            {/* Test Button */}
+            <button
+              onClick={testEnforce}
+              disabled={loading || progress.goalMet}
+              className="w-full py-2 text-[11px] font-medium bg-zinc-100 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
+            >
+              {loading ? 'Processing...' : progress.goalMet ? 'Goal Met!' : 'Test Enforce Now'}
+            </button>
+          </div>
+        </>
+      )}
+
+      {!settings.enabled && (
+        <p className="text-[11px] text-zinc-500 text-center py-2">
+          Enable to set daily tab reduction goals and track your progress.
+        </p>
+      )}
+    </GlassCard>
   );
 }
 
@@ -2028,10 +2231,12 @@ export default function Popup() {
                         <p className="text-[9px] text-zinc-500">Total tabs across all windows</p>
                       </div>
                     </div>
-                    <span className="text-lg font-bold text-zinc-900">{totalTabs}</span>
                   </div>
                   <DailyTabsChart data={dailyTabCounts} />
                 </GlassCard>
+
+                {/* Daily Drop Goal */}
+                <DailyDropGoalCard onMessage={showMessage} />
 
                 {/* Tab Distribution - macOS Storage Style */}
                 <TabDistributionChart tabs={tabs} />

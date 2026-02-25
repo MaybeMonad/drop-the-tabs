@@ -70,4 +70,22 @@ export interface Settings {
   maxTabs: number;
   tabThreshold: number;
   excludeDomains: string[];
+  // Daily Drop Goal settings
+  dailyDropGoal: {
+    enabled: boolean;
+    targetReduction: number; // Number of tabs to reduce compared to yesterday
+    autoEnforce: boolean; // Whether to auto-close tabs if goal not met
+    enforceTime: string; // Time of day to enforce (HH:mm format)
+  };
+}
+
+export interface DailyGoalProgress {
+  date: string;
+  startCount: number; // Tab count at start of day
+  currentCount: number; // Current tab count
+  targetCount: number; // Target count (startCount - targetReduction)
+  reduced: number; // How many tabs have been reduced
+  remaining: number; // How many more need to be reduced
+  goalMet: boolean;
+  enforced: boolean; // Whether auto-enforce has run today
 }

@@ -94,11 +94,58 @@ export default defineBackground(() => {
   // Periodic tasks
   chrome.alarms.create('autoCleanup', { periodInMinutes: 5 });
   chrome.alarms.create('saveStats', { periodInMinutes: 1 });
+  chrome.alarms.create('dailyGoalCheck', { periodInMinutes: 5 }); // Check daily goal every 5 minutes
 
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === 'autoCleanup') tabManager.autoCleanup();
     if (alarm.name === 'saveStats') statsCollector.saveToStorage();
+    if (alarm.name === 'dailyGoalCheck') {
+      checkDailyGoal();
+    }
   });
+
+  // Check daily goal and show notifications
+  async function checkDailyGoal(): Promise<void> {
+    const settings = await tabManager.getSettings();
+    if (!settings.dailyDropGoal?.enabled) return;
+
+    const progress = await tabManager.getDailyGoalProgress();
+    const now = new Date();
+    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    
+    // Check if it's time to enforce (within 5 minutes of enforceTime)
+    const enforceTime = settings.dailyDropGoal.enforceTime || '23:59';
+    const isEnforceTime = currentTime >= enforceTime && currentTime <= addMinutes(enforceTime, 5);
+
+    if (isEnforceTime && settings.dailyDropGoal.autoEnforce && !progress.enforced && !progress.goalMet) {
+      const result = await tabManager.checkAndEnforceDailyGoal();
+      if (result.enforced) {
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: chrome.runtime.getURL('/icon/128.png'),
+          title: 'Daily Drop Goal Enforced',
+          message: result.message || `Closed ${result.closedCount} tabs to meet your daily target.`,
+        });
+      }
+    }
+
+    // Send progress notification every few hours if goal not met
+    if (!progress.goalMet && progress.remaining > 0 && now.getHours() % 4 === 0 && now.getMinutes() < 5) {
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('/icon/128.png'),
+        title: 'Daily Drop Goal Progress',
+        message: `You need to close ${progress.remaining} more tabs to reach today's goal.`,
+      });
+    }
+  }
+
+  function addMinutes(timeStr: string, minutes: number): string {
+    const [hours, mins] = timeStr.split(':').map(Number);
+    const date = new Date();
+    date.setHours(hours, mins + minutes);
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  }
 
   // Message handlers
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -281,6 +328,27 @@ export default defineBackground(() => {
           case 'exportData':
             const data = await tabManager.exportData(request.format);
             sendResponse({ success: true, data });
+            break;
+
+          // Daily Drop Goal
+          case 'getDailyGoalProgress':
+            const goalProgress = await tabManager.getDailyGoalProgress();
+            sendResponse({ success: true, data: goalProgress });
+            break;
+
+          case 'updateDailyGoalSettings':
+            await tabManager.updateDailyGoalSettings(request.settings);
+            sendResponse({ success: true });
+            break;
+
+          case 'checkAndEnforceDailyGoal':
+            const enforceResult = await tabManager.checkAndEnforceDailyGoal();
+            sendResponse({ success: true, ...enforceResult });
+            break;
+
+          case 'getDailyGoalStats':
+            const goalStats = await tabManager.getDailyGoalStats();
+            sendResponse({ success: true, data: goalStats });
             break;
 
           default:

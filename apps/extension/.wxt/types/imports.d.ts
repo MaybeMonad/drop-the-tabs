@@ -65,6 +65,6 @@ declare global {
   export type { TabManager } from '/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/tabManager'
   import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/tabManager')
   // @ts-ignore
-  export type { TabInfo, Session, GroupRule, TabStats, DailyStats, Settings } from '/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/types'
+  export type { TabInfo, Session, GroupRule, TabStats, DailyStats, Settings, DailyGoalProgress } from '/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/types'
   import('/Users/leo/Documents/Projects/drop-the-tabs/apps/extension/src/utils/types')
 }
