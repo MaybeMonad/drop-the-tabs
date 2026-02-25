@@ -561,15 +561,16 @@ function DailyDropGoalCard({ onMessage }: DailyGoalSettingsProps) {
     
     try {
       // First update backend
+      console.log('[DailyDropGoal] Sending message...');
       const response = await chrome.runtime.sendMessage({
         action: 'updateDailyGoalSettings',
         settings: newSettings
       });
       
-      console.log('[DailyDropGoal] Backend response:', response);
+      console.log('[DailyDropGoal] Backend response:', JSON.stringify(response));
       
-      if (!response.success) {
-        throw new Error(response.error || 'Unknown error');
+      if (!response || !response.success) {
+        throw new Error(response?.error || 'Unknown error');
       }
       
       // Then update local state to match

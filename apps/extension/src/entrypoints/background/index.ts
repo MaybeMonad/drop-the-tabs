@@ -149,6 +149,8 @@ export default defineBackground(() => {
 
   // Message handlers
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    console.log('[BG] Received message:', request.action, request);
+    
     (async () => {
       try {
         switch (request.action) {
@@ -359,7 +361,8 @@ export default defineBackground(() => {
             break;
 
           default:
-            sendResponse({ success: false, error: 'Unknown action' });
+            console.log('[BG] Unknown action:', request.action);
+            sendResponse({ success: false, error: 'Unknown action: ' + request.action });
         }
       } catch (error) {
         console.error('[DTT] Error:', error);
