@@ -37,11 +37,14 @@ import {
   FolderOpen,
   DownloadSimple,
   Target,
+  Brain,
+  ListChecks,
 } from "@phosphor-icons/react";
 import type { TabInfo, Session, TabStats } from "../utils/types";
 import "../style.css";
 import { NaturalLanguageCommand } from "./NaturalLanguageCommand";
 import { ExportPanel } from "./ExportPanel";
+import { AITabAnalyzer } from "./AITabAnalyzer";
 
 // Types
 interface TabGroup {
@@ -2327,6 +2330,16 @@ export default function Popup() {
 
                 {/* Daily Drop Goal */}
                 <DailyDropGoalCard onMessage={showMessage} />
+
+                {/* AI Tab Analyzer */}
+                <AITabAnalyzer 
+                  tabs={tabs} 
+                  onCloseTabs={(tabIds) => {
+                    tabIds.forEach(id => handleCloseTab(id));
+                    showMessage(`Closed ${tabIds.length} tabs`, 'success');
+                  }}
+                  onMessage={showMessage}
+                />
 
                 {/* Tab Distribution - macOS Storage Style */}
                 <TabDistributionChart tabs={tabs} />
