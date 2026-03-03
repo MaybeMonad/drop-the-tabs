@@ -13,6 +13,16 @@ const DEFAULT_RULES: GroupRule[] = [
 export class TabManager {
   private rules: GroupRule[] = DEFAULT_RULES;
   private groupMap: Map<string, number> = new Map(); // ruleId -> groupId
+  private recentTabs = new Map<number, number>(); // tabId -> openTime
+  
+  // Smart grouping config
+  private readonly SMART_GROUP_CONFIG = {
+    maxTabsBeforePause: 10,
+    recentTabGracePeriod: 30000,
+    idleDelay: 5000,
+    minTabsForGroup: 3,
+    maxGroups: 5,
+  };
 
   async handleTabCreated(tab: chrome.tabs.Tab) {
     // Auto-group new tabs if enabled
@@ -34,22 +44,167 @@ export class TabManager {
   }
 
   async autoGroupTabs() {
-    const tabs = await chrome.tabs.query({ pinned: false });
+    const tabs = await chrome.tabs.query({ currentWindow: true });
+    const { SMART_GROUP_CONFIG } = this;
     
-    for (const tab of tabs) {
-      if (tab.groupId !== -1) continue; // Already grouped
-      if (!tab.url) continue;
-
-      const matchedRule = this.findMatchingRule(tab.url, tab.title || '');
-      if (matchedRule) {
-        try {
-          const groupId = await this.getOrCreateGroup(matchedRule);
-          await chrome.tabs.group({ tabIds: tab.id!, groupId });
-        } catch (error) {
-          console.error('Failed to group tab:', error);
+    // 1. 检查标签总数
+    if (tabs.length > SMART_GROUP_CONFIG.maxTabsBeforePause) {
+      console.log(`[DTT] 标签过多(${tabs.length})，暂停自动分组`);
+      return;
+    }
+    
+    // 2. 获取活跃标签
+    const activeTab = tabs.find(t => t.active);
+    
+    // 3. 获取可分组标签（过滤掉排除的）
+    const groupableTabs = tabs.filter(tab => {
+      // 排除固定的
+      if (tab.pinned) return false;
+      
+      // 排除活跃的（用户正在看）
+      if (activeTab && tab.id === activeTab.id) return false;
+      
+      // 排除最近打开的（30秒内）
+      const openTime = this.recentTabs.get(tab.id || 0);
+      if (openTime) {
+        const elapsed = Date.now() - openTime;
+        if (elapsed < SMART_GROUP_CONFIG.recentTabGracePeriod) return false;
+      }
+      
+      // 排除已经在分组里的
+      if (tab.groupId !== -1) return false;
+      
+      // 排除没有URL的
+      if (!tab.url) return false;
+      
+      return true;
+    });
+    
+    if (groupableTabs.length === 0) return;
+    
+    // 4. 按类别分类
+    const categories = this.categorizeTabsByDomain(groupableTabs);
+    
+    // 5. 处理每个类别
+    for (const [category, categoryTabs] of Object.entries(categories)) {
+      if (categoryTabs.length >= SMART_GROUP_CONFIG.minTabsForGroup) {
+        // 检查当前分组数量
+        const currentGroups = await chrome.tabGroups.query({});
+        if (currentGroups.length >= SMART_GROUP_CONFIG.maxGroups) {
+          console.log('[DTT] 已达到最大分组数');
+          break;
         }
+        
+        // 延迟分组（给用户时间反应）
+        await this.delayedGroup(categoryTabs, category);
       }
     }
+  }
+
+  // 按域名分类标签
+  private categorizeTabsByDomain(tabs: chrome.tabs.Tab[]): Record<string, chrome.tabs.Tab[]> {
+    const categories: Record<string, chrome.tabs.Tab[]> = {};
+    
+    for (const tab of tabs) {
+      const domain = this.extractDomain(tab.url || '');
+      const category = this.getCategoryByDomain(domain);
+      
+      if (!categories[category]) {
+        categories[category] = [];
+      }
+      categories[category].push(tab);
+    }
+    
+    return categories;
+  }
+
+  // 提取域名
+  private extractDomain(url: string): string {
+    try {
+      return new URL(url).hostname.replace(/^www\./, '');
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  // 域名到分类映射
+  private getCategoryByDomain(domain: string): string {
+    const DOMAIN_CATEGORY_MAP: Record<string, string> = {
+      'github.com': '开发',
+      'stackoverflow.com': '开发',
+      'gitlab.com': '开发',
+      'vercel.com': '开发',
+      'twitter.com': '社交',
+      'x.com': '社交',
+      'linkedin.com': '社交',
+      'notion.so': '工作',
+      'figma.com': '设计',
+      'docs.google.com': '文档',
+      'youtube.com': '视频',
+      'bilibili.com': '视频',
+      'google.com': '搜索',
+    };
+    
+    return DOMAIN_CATEGORY_MAP[domain] || domain.split('.')[0];
+  }
+
+  // 获取分类颜色
+  private getCategoryColor(category: string): chrome.tabGroups.Color {
+    const colors: Record<string, chrome.tabGroups.Color> = {
+      '开发': 'blue',
+      '社交': 'pink',
+      '工作': 'yellow',
+      '设计': 'purple',
+      '视频': 'red',
+      '搜索': 'grey',
+    };
+    return colors[category] || 'grey';
+  }
+
+  // 延迟分组
+  private async delayedGroup(tabs: chrome.tabs.Tab[], categoryName: string) {
+    // 延迟3秒后执行分组（给用户时间）
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    // 重新检查这些标签是否仍然可以分组
+    const tabIds = tabs.map(t => t.id).filter((id): id is number => !!id);
+    const currentTabs = await chrome.tabs.query({ tabId: tabIds });
+    
+    // 过滤掉已经被关闭或分组的
+    const validTabs = currentTabs.filter(t => {
+      return tabIds.includes(t.id!) && t.groupId === -1;
+    });
+    
+    if (validTabs.length < 3) return;
+    
+    // 执行分组
+    const validTabIds = validTabs.map(t => t.id!);
+    const groupId = await chrome.tabs.group({ tabIds: validTabIds });
+    
+    // 设置分组属性
+    await chrome.tabGroups.update(groupId, {
+      title: categoryName,
+      color: this.getCategoryColor(categoryName),
+      collapsed: true  // 默认折叠，不占用空间
+    });
+    
+    console.log(`[DTT] 创建分组「${categoryName}」，包含 ${validTabs.length} 个标签`);
+  }
+
+  // 设置智能分组的事件监听
+  setupSmartGroupingListeners() {
+    // 标签创建时记录时间
+    chrome.tabs.onCreated.addListener((tab) => {
+      if (tab.id) {
+        this.recentTabs.set(tab.id, Date.now());
+        setTimeout(() => this.recentTabs.delete(tab.id!), 60000 * 30);
+      }
+    });
+    
+    // 标签关闭时清理
+    chrome.tabs.onRemoved.addListener((tabId) => {
+      this.recentTabs.delete(tabId);
+    });
   }
 
   private findMatchingRule(url: string, title: string): GroupRule | null {
