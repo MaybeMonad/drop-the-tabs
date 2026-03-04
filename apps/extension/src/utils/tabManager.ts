@@ -25,10 +25,17 @@ export class TabManager {
   };
 
   async handleTabCreated(tab: chrome.tabs.Tab) {
-    // Auto-group new tabs if enabled
+    // Record tab creation time
+    if (tab.id) {
+      this.recentTabs.set(tab.id, Date.now());
+      setTimeout(() => this.recentTabs.delete(tab.id!), 60000 * 30);
+    }
+    
+    // Auto-group new tabs if enabled (with delay)
     const settings = await this.getSettings();
     if (settings.autoGroup) {
-      await this.autoGroupTabs();
+      // Delay auto-grouping to avoid immediate interference
+      setTimeout(() => this.autoGroupTabs(), 5000);
     }
   }
 
@@ -163,8 +170,8 @@ export class TabManager {
 
   // 延迟分组
   private async delayedGroup(tabs: chrome.tabs.Tab[], categoryName: string) {
-    // 延迟3秒后执行分组（给用户时间）
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // 延迟5秒后执行分组（给用户足够时间）
+    await new Promise(resolve => setTimeout(resolve, 5000));
     
     // 重新检查这些标签是否仍然可以分组
     const tabIds = tabs.map(t => t.id).filter((id): id is number => !!id);

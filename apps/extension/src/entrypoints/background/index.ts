@@ -18,6 +18,9 @@ export default defineBackground(() => {
   const autoReminder = new AutoReminder();
   const syncService = getFirebaseSyncService();
 
+  // Setup smart grouping listeners
+  tabManager.setupSmartGroupingListeners();
+
   // Initialize on startup
   initializeExtension();
 
