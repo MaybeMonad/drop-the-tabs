@@ -21,7 +21,7 @@ export class FirebaseAdapter extends BaseSyncAdapter implements SyncAdapter {
   private app: any; // FirebaseApp
   private db: any; // Database
   private auth: any; // Auth
-  private connected: boolean = false;
+  protected connected: boolean = false;
   private subscriptions: Map<string, Unsubscribe> = new Map();
 
   constructor(config: AdapterConfig) {

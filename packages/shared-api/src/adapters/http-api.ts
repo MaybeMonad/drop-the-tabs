@@ -18,14 +18,15 @@ export class HttpApiAdapter extends BaseSyncAdapter implements SyncAdapter {
   private apiUrl: string;
   private userId: string | null = null;
   private deviceId: string;
-  private connected: boolean = false;
+  protected connected: boolean = false;
   private pollingIntervals: Map<string, number> = new Map();
 
   constructor(config: AdapterConfig) {
     super(config);
     
     // Support both 'custom' and 'firebase' types with httpEndpoint
-    this.apiUrl = config.httpEndpoint || config.wsEndpoint?.replace('ws', 'http') || '';
+    const customConfig = config.customConfig;
+    this.apiUrl = customConfig?.httpEndpoint || customConfig?.wsEndpoint?.replace('ws', 'http') || '';
     
     if (!this.apiUrl) {
       throw new Error('httpEndpoint is required for HttpApiAdapter');

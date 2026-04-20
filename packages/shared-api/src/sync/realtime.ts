@@ -1,7 +1,7 @@
 // Real-time sync service using WebSocket
 import { EventEmitter } from 'events';
 import type { Tab, TabChangeEvent, SyncAdapter, AdapterConfig } from '@drop-the-tabs/shared-core';
-import { keyExchangeService } from './crypto/index.js';
+import { keyExchangeService } from '../crypto/index.js';
 
 export interface SyncMessage {
   type: 'handshake' | 'sync' | 'ping' | 'pong' | 'error' | 'ack';
@@ -102,11 +102,14 @@ export class RealtimeSyncService extends EventEmitter {
   async syncTabs(tabs: Tab[]): Promise<void> {
     if (!this.isConnected()) {
       // Queue for later
-      this.pendingChanges.push({
-        type: 'full_sync',
-        tabs,
-        timestamp: Date.now(),
-      });
+      // Queue a change for each tab
+      for (const tab of tabs) {
+        this.pendingChanges.push({
+          type: 'updated',
+          tab,
+          timestamp: Date.now(),
+        });
+      }
       return;
     }
 

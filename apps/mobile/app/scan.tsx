@@ -4,9 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Server } from 'lucide-react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useMobilePairing } from '../../src/hooks/useMobilePairing';
-import { useAppStore } from '../../src/stores/appStore';
-import { getFirebaseUrl } from '../../src/config/backend';
+import { useMobilePairing } from '../src/hooks/useMobilePairing';
+import { useAppStore } from '../src/stores/appStore';
+import { getFirebaseUrl } from '../src/config/backend';
 
 export default function ScanScreen() {
   const router = useRouter();

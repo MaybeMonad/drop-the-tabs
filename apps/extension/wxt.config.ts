@@ -19,7 +19,8 @@ export default defineConfig({
       'idle',
       'notifications',
       'alarms',
-      'activeTab'
+      'activeTab',
+      'downloads'
     ],
     host_permissions: ['<all_urls>'],
     action: {

@@ -45,6 +45,7 @@ import "../style.css";
 import { NaturalLanguageCommand } from "./NaturalLanguageCommand";
 import { ExportPanel } from "./ExportPanel";
 import { AITabAnalyzer } from "./AITabAnalyzer";
+import { exportAllTabsToInbox } from "../services/obsidianExport";
 
 // Types
 interface TabGroup {
@@ -1696,6 +1697,38 @@ export default function Popup() {
     }
   };
 
+  const handleExportAllToInbox = async () => {
+    setLoading("inbox");
+    try {
+      const allTabs = await chrome.tabs.query({});
+      const validTabs = allTabs
+        .filter(tab => tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('chrome-extension://'))
+        .map(tab => ({
+          id: tab.id!,
+          url: tab.url!,
+          title: tab.title || 'Untitled',
+          favIconUrl: tab.favIconUrl,
+        }));
+
+      if (validTabs.length === 0) {
+        showMessage("No valid tabs to export", "info");
+        setLoading(null);
+        return;
+      }
+
+      const result = await exportAllTabsToInbox(validTabs);
+      if (result.success) {
+        showMessage(`Exported ${result.exportedCount} tabs to Inbox`, "success");
+      } else {
+        showMessage(`Export failed: ${result.errors.join(', ')}`, "error");
+      }
+    } catch (error) {
+      showMessage("Export to Inbox failed", "error");
+    } finally {
+      setLoading(null);
+    }
+  };
+
   const handleCloseAll = async () => {
     if (confirm("Close all non-pinned tabs?")) {
       await chrome.runtime.sendMessage({ action: "closeAll" });
@@ -1954,7 +1987,7 @@ export default function Popup() {
 
         {/* Quick Actions - Compact */}
         <motion.div
-          className="grid grid-cols-4 gap-2"
+          className="grid grid-cols-5 gap-2"
           variants={staggerContainer}
           initial="hidden"
           animate="show"
@@ -2003,6 +2036,16 @@ export default function Popup() {
             >
               <Export className="w-3.5 h-3.5" weight="regular" />
               <span>Export</span>
+            </QuickActionButton>
+          </motion.div>
+
+          <motion.div variants={staggerItem}>
+            <QuickActionButton
+              onClick={handleExportAllToInbox}
+              variant="primary"
+            >
+              <FolderOpen className="w-3.5 h-3.5" weight="regular" />
+              <span>Inbox</span>
             </QuickActionButton>
           </motion.div>
         </motion.div>
